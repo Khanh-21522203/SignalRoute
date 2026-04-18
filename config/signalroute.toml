@@ -1,0 +1,84 @@
+# ──────────────────────────────────────────────────────
+# SignalRoute — Reference Configuration
+# All values shown are defaults unless noted otherwise.
+# ──────────────────────────────────────────────────────
+
+[server]
+role = "standalone"               # gateway | processor | query | geofence | matcher | standalone
+listen_addr = "0.0.0.0"
+grpc_port = 9090
+udp_port = 9091
+# tls_cert = "/etc/signalroute/tls/cert.pem"
+# tls_key  = "/etc/signalroute/tls/key.pem"
+
+[kafka]
+brokers = "localhost:9092"
+ingest_topic = "tm.location.events"
+geofence_topic = "tm.geofence.events"
+dlq_topic = "tm.location.dlq"
+consumer_group = "signalroute-processor"
+num_partitions = 16
+batch_size_bytes = 65536           # 64 KB
+linger_ms = 5
+
+[redis]
+addrs = "localhost:6379"
+pool_size = 32
+connect_timeout_ms = 1000
+read_timeout_ms = 500
+key_prefix = "sr"
+device_ttl_s = 3600                # 1 hour
+
+[postgis]
+dsn = "host=localhost port=5432 dbname=signalroute user=sr_user password=sr_pass"
+pool_size = 16
+write_batch_size = 500
+write_flush_interval_ms = 500
+query_timeout_ms = 5000
+
+[processor]
+dedup_ttl_s = 300                  # 5 minutes
+dedup_max_entries = 500000
+sequence_guard_enabled = true
+out_of_order_tolerance_s = 60
+history_batch_size = 500
+history_flush_interval_ms = 500
+history_buffer_max_rows = 10000
+redis_max_retries = 3
+redis_backoff_max_ms = 5000
+
+[spatial]
+h3_resolution = 7
+nearby_max_results = 1000
+nearby_max_radius_m = 50000.0      # 50 km
+h3_cache_size_mb = 64
+
+[geofence]
+eval_enabled = true
+dwell_threshold_s = 300
+max_fences = 10000
+reload_interval_s = 60
+
+[gateway]
+max_batch_events = 1000
+rate_limit_rps_per_device = 100
+timestamp_skew_tolerance_s = 30
+queue_full_timeout_ms = 500
+
+[matching]
+strategy_name = "default"
+request_topic = "sr.match.requests"
+result_topic = "sr.match.results"
+request_ttl_ms = 5000
+
+[threads]
+io_threads = 0                     # 0 = auto (num_cpus)
+processor_threads = 0              # 0 = auto (num_partitions)
+geofence_eval_threads = 4
+blocking_pool_size = 16
+
+[observability]
+metrics_addr = "0.0.0.0"
+metrics_port = 9100
+metrics_path = "/metrics"
+log_level = "info"                 # trace | debug | info | warn | error

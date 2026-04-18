@@ -1,0 +1,34 @@
+// SignalRoute — Admin API Wire Format
+// Used for health checks, metrics, and operational management.
+
+syntax = "proto3";
+
+package signalroute;
+
+option cc_enable_arenas = true;
+
+message HealthRequest {}
+
+message HealthResponse {
+    bool   healthy = 1;
+    string role    = 2;     // gateway | processor | query | geofence | matcher
+    string version = 3;
+    int64  uptime_s = 4;
+
+    // Component health
+    bool   kafka_connected  = 5;
+    bool   redis_connected  = 6;
+    bool   postgis_connected = 7;
+}
+
+message MetricsRequest {}
+
+message MetricsResponse {
+    // Prometheus text format
+    string metrics_text = 1;
+}
+
+service AdminService {
+    rpc Health(HealthRequest) returns (HealthResponse);
+    rpc Metrics(MetricsRequest) returns (MetricsResponse);
+}

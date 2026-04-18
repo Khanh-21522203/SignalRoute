@@ -1,0 +1,113 @@
+// SignalRoute — Query Service Wire Format
+// Used by consumers to read location data.
+
+syntax = "proto3";
+
+package signalroute;
+
+option cc_enable_arenas = true;
+
+// --- Latest Location ---
+
+message GetLatestRequest {
+    string device_id = 1;
+}
+
+message DeviceStateResponse {
+    string  device_id   = 1;
+    double  lat         = 2;
+    double  lon         = 3;
+    float   altitude_m  = 4;
+    float   accuracy_m  = 5;
+    float   speed_ms    = 6;
+    float   heading_deg = 7;
+    int64   h3_cell     = 8;   // H3 cell ID at configured resolution
+    uint64  seq         = 9;
+    int64   updated_at  = 10;  // Unix epoch ms
+}
+
+// --- Nearby Search ---
+
+message NearbyRequest {
+    double lat            = 1;
+    double lon            = 2;
+    double radius_m       = 3;   // Max: 50,000 m (server-enforced)
+    int32  limit          = 4;   // Default: 100, max: 1000
+    int32  last_seen_s    = 5;   // Only include devices seen within N seconds
+    bool   include_stale  = 6;   // If false: skip devices older than last_seen_s
+    repeated string filter_metadata_keys = 7;
+}
+
+message NearbyDevice {
+    string device_id   = 1;
+    double lat         = 2;
+    double lon         = 3;
+    double distance_m  = 4;
+    int64  updated_at  = 5;
+    float  speed_ms    = 6;
+    float  heading_deg = 7;
+}
+
+message NearbyResponse {
+    repeated NearbyDevice devices     = 1;
+    int32  total_candidates           = 2;  // Before limit
+    int32  total_in_radius            = 3;  // Before limit
+}
+
+// --- Trip Replay ---
+
+message TripRequest {
+    string device_id        = 1;
+    int64  from_ts          = 2;   // Unix epoch ms
+    int64  to_ts            = 3;   // Unix epoch ms
+    int32  sample_interval_s = 4;  // 0 = all points; >0 = downsample
+    int32  limit            = 5;   // Max rows returned
+
+    // Optional spatial filter
+    oneof spatial_filter {
+        CircleFilter circle = 10;
+        BBoxFilter   bbox   = 11;
+    }
+}
+
+message CircleFilter {
+    double lat      = 1;
+    double lon      = 2;
+    double radius_m = 3;
+}
+
+message BBoxFilter {
+    double min_lat = 1;
+    double min_lon = 2;
+    double max_lat = 3;
+    double max_lon = 4;
+}
+
+message TripPoint {
+    string device_id   = 1;
+    double lat         = 2;
+    double lon         = 3;
+    float  altitude_m  = 4;
+    float  accuracy_m  = 5;
+    float  speed_ms    = 6;
+    float  heading_deg = 7;
+    int64  event_time  = 8;  // Device clock
+    int64  recv_time   = 9;  // Server clock
+    uint64 seq         = 10;
+    int64  h3_cell     = 11;
+}
+
+message TripResponse {
+    repeated TripPoint points = 1;
+    int32 total_points        = 2;
+}
+
+// --- Query Service ---
+
+service QueryService {
+    rpc GetLatestLocation(GetLatestRequest) returns (DeviceStateResponse);
+    rpc NearbyDevices(NearbyRequest) returns (NearbyResponse);
+    rpc GetTrip(TripRequest) returns (TripResponse);
+    // TODO: Add streaming variant for large trip replays
+    // rpc GetTripStream(TripRequest) returns (stream TripPoint);
+}

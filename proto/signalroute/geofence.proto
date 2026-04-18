@@ -1,0 +1,104 @@
+// SignalRoute — Geofence Wire Format
+// Used by Geofence Engine (producer) and downstream consumers.
+
+syntax = "proto3";
+
+package signalroute;
+
+option cc_enable_arenas = true;
+
+// --- Geofence Events ---
+
+enum GeofenceEventType {
+    GEOFENCE_ENTER = 0;
+    GEOFENCE_EXIT  = 1;
+    GEOFENCE_DWELL = 2;
+}
+
+// Published to Kafka geofence topic on state change.
+message GeofenceEvent {
+    string             device_id         = 1;
+    string             fence_id          = 2;
+    string             fence_name        = 3;
+    GeofenceEventType  event_type        = 4;
+    double             lat               = 5;
+    double             lon               = 6;
+    int64              event_ts_ms       = 7;
+    int32              inside_duration_s = 8;  // For DWELL events
+}
+
+// --- Geofence Evaluation Request (Processor → Engine) ---
+
+message GeofenceEvalRequest {
+    string device_id    = 1;
+    int64  old_h3_cell  = 2;
+    int64  new_h3_cell  = 3;
+    double lat          = 4;
+    double lon          = 5;
+    int64  timestamp_ms = 6;
+}
+
+// --- Admin API: Fence Management ---
+
+message CreateFenceRequest {
+    string name              = 1;
+    string geometry_geojson  = 2;  // GeoJSON Polygon
+    int32  dwell_threshold_s = 3;  // Default: 300
+    map<string, string> metadata = 4;
+}
+
+message CreateFenceResponse {
+    string fence_id = 1;
+    int32  h3_cell_count = 2;  // Number of H3 cells in polyfill
+}
+
+message ListFencesRequest {
+    bool active_only = 1;
+}
+
+message FenceInfo {
+    string fence_id          = 1;
+    string name              = 2;
+    bool   active            = 3;
+    int32  h3_cell_count     = 4;
+    int32  dwell_threshold_s = 5;
+    int64  created_at        = 6;
+}
+
+message ListFencesResponse {
+    repeated FenceInfo fences = 1;
+}
+
+message DeleteFenceRequest {
+    string fence_id = 1;
+}
+
+message DeleteFenceResponse {
+    bool ok = 1;
+}
+
+// Geofence query: which fences is a device currently inside?
+message DeviceFencesRequest {
+    string device_id = 1;
+}
+
+message DeviceFenceState {
+    string fence_id   = 1;
+    string fence_name = 2;
+    string state      = 3;  // OUTSIDE | INSIDE | DWELL
+    int64  entered_at = 4;  // Unix epoch ms
+}
+
+message DeviceFencesResponse {
+    repeated DeviceFenceState fences = 1;
+}
+
+service GeofenceService {
+    // Admin
+    rpc CreateFence(CreateFenceRequest) returns (CreateFenceResponse);
+    rpc ListFences(ListFencesRequest) returns (ListFencesResponse);
+    rpc DeleteFence(DeleteFenceRequest) returns (DeleteFenceResponse);
+
+    // Query
+    rpc GetDeviceFences(DeviceFencesRequest) returns (DeviceFencesResponse);
+}

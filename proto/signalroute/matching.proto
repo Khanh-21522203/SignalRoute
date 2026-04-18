@@ -1,0 +1,54 @@
+// SignalRoute — Matching Server Wire Format
+// Used by Matching Server framework and strategy plugins.
+
+syntax = "proto3";
+
+package signalroute;
+
+option cc_enable_arenas = true;
+
+// --- Match Request (consumed from Kafka) ---
+
+message MatchRequest {
+    string request_id   = 1;   // Unique request identifier
+    string requester_id = 2;   // Who needs a match (rider, customer, etc.)
+    double lat          = 3;   // Requester position
+    double lon          = 4;   // Requester position
+    double radius_m     = 5;   // Initial search radius
+    int32  max_agents   = 6;   // How many agents to match (1 for 1:1)
+    int64  deadline_ms  = 7;   // Unix epoch ms — request expires after this
+    string strategy     = 8;   // Strategy plugin name to use
+    map<string, string> metadata = 9;  // Domain-specific attributes
+}
+
+// --- Match Candidate (framework provides to plugin) ---
+
+message MatchCandidate {
+    string agent_id    = 1;
+    double lat         = 2;
+    double lon         = 3;
+    double distance_m  = 4;
+    float  speed_ms    = 5;
+    float  heading_deg = 6;
+    int64  updated_at  = 7;
+    map<string, string> metadata = 8;  // Agent attributes
+}
+
+// --- Match Result (published to Kafka) ---
+
+enum MatchStatus {
+    MATCH_SUCCESS       = 0;
+    MATCH_NO_CANDIDATES = 1;
+    MATCH_FAILED        = 2;
+    MATCH_EXPIRED       = 3;
+}
+
+message MatchResult {
+    string      request_id   = 1;
+    string      requester_id = 2;
+    MatchStatus status       = 3;
+    repeated string assigned_agent_ids = 4;
+    int64       latency_ms   = 5;  // Time from request to result
+    string      strategy     = 6;  // Which strategy produced this result
+    string      failure_reason = 7;
+}
