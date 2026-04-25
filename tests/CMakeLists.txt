@@ -14,6 +14,26 @@ add_executable(test_event_bus unit/test_event_bus.cpp)
 target_link_libraries(test_event_bus PRIVATE sr_common)
 add_test(NAME test_event_bus COMMAND test_event_bus)
 
+add_executable(test_composition_root unit/test_composition_root.cpp)
+target_link_libraries(test_composition_root PRIVATE sr_common)
+add_test(NAME test_composition_root COMMAND test_composition_root)
+
+add_executable(test_dedup_window unit/test_dedup_window.cpp)
+target_link_libraries(test_dedup_window PRIVATE sr_processor)
+add_test(NAME test_dedup_window COMMAND test_dedup_window)
+
+add_executable(test_sequence_guard unit/test_sequence_guard.cpp)
+target_link_libraries(test_sequence_guard PRIVATE sr_processor)
+add_test(NAME test_sequence_guard COMMAND test_sequence_guard)
+
+add_executable(test_state_writer unit/test_state_writer.cpp)
+target_link_libraries(test_state_writer PRIVATE sr_processor)
+add_test(NAME test_state_writer COMMAND test_state_writer)
+
+add_executable(test_nearby_handler unit/test_nearby_handler.cpp)
+target_link_libraries(test_nearby_handler PRIVATE sr_query sr_processor)
+add_test(NAME test_nearby_handler COMMAND test_nearby_handler)
+
 add_executable(test_location_state_query unit/test_location_state_query.cpp)
 target_link_libraries(test_location_state_query PRIVATE sr_common sr_processor sr_query)
 add_test(NAME test_location_state_query COMMAND test_location_state_query)
