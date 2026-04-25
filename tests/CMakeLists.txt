@@ -1,19 +1,15 @@
-add_executable(sr_tests
-    unit/test_haversine.cpp
-    unit/test_point_in_polygon.cpp
-    unit/test_validator.cpp
-)
+add_executable(test_haversine unit/test_haversine.cpp)
+target_link_libraries(test_haversine PRIVATE sr_common)
+add_test(NAME test_haversine COMMAND test_haversine)
 
-target_link_libraries(sr_tests
-    PRIVATE
-        sr_common
-        sr_gateway
-        sr_processor
-        sr_query
-        sr_geofence
-        sr_matching
-)
+add_executable(test_point_in_polygon unit/test_point_in_polygon.cpp)
+target_link_libraries(test_point_in_polygon PRIVATE sr_geofence)
+add_test(NAME test_point_in_polygon COMMAND test_point_in_polygon)
 
-# TODO: Add GTest/Catch2 include directories and link libraries here once integrated
+add_executable(test_validator unit/test_validator.cpp)
+target_link_libraries(test_validator PRIVATE sr_gateway)
+add_test(NAME test_validator COMMAND test_validator)
 
-add_test(NAME sr_tests COMMAND sr_tests)
+add_executable(test_phase0_smoke unit/test_phase0_smoke.cpp)
+target_link_libraries(test_phase0_smoke PRIVATE sr_common sr_processor sr_query)
+add_test(NAME test_phase0_smoke COMMAND test_phase0_smoke)

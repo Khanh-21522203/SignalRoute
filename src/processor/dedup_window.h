@@ -12,6 +12,9 @@
 
 #include <string>
 #include <cstdint>
+#include <chrono>
+#include <list>
+#include <unordered_map>
 
 namespace signalroute {
 
@@ -48,12 +51,17 @@ public:
     void evict_expired();
 
 private:
+    struct Entry {
+        std::string device_id;
+        uint64_t seq;
+        std::chrono::steady_clock::time_point seen_at;
+    };
+
     size_t max_entries_;
     int    ttl_seconds_;
 
-    // TODO: Add LRU data structure
-    // std::list<LruEntry> lru_list_;
-    // std::unordered_map<Key, list::iterator> map_;
+    std::list<Entry> lru_list_;
+    std::unordered_map<std::string, std::list<Entry>::iterator> map_;
 };
 
 } // namespace signalroute

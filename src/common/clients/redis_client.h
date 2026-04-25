@@ -23,6 +23,9 @@
 #include <vector>
 #include <optional>
 #include <cstdint>
+#include <mutex>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace signalroute {
 
@@ -148,6 +151,12 @@ public:
 
 private:
     RedisConfig config_;
+
+    std::mutex mu_;
+    std::unordered_map<std::string, DeviceState> device_states_;
+    std::unordered_map<int64_t, std::unordered_set<std::string>> cell_devices_;
+    std::unordered_map<std::string, FenceState> fence_states_;
+    std::unordered_map<std::string, std::string> reservations_;
 
     // TODO: Add redis-plus-plus connection pool
     // sw::redis::ConnectionPool pool_;

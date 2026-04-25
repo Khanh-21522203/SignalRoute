@@ -2,9 +2,15 @@
  * SignalRoute — Unit Tests: Validator
  */
 
-#include "../src/gateway/validator.h"
+#include "gateway/validator.h"
 #include <cassert>
 #include <iostream>
+#include <chrono>
+
+int64_t now_ms() {
+    const auto now = std::chrono::system_clock::now().time_since_epoch();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+}
 
 void test_valid_event() {
     signalroute::GatewayConfig cfg;
@@ -16,7 +22,7 @@ void test_valid_event() {
     e.device_id = "device-1";
     e.lat = 10.8231;
     e.lon = 106.6297;
-    e.timestamp_ms = 1700000000000;
+    e.timestamp_ms = now_ms();
     e.seq = 42;
 
     auto result = v.validate(e);
@@ -33,7 +39,7 @@ void test_invalid_coords() {
     e.device_id = "dev-1";
     e.lat = 91.0;  // Out of range
     e.lon = 106.0;
-    e.timestamp_ms = 1700000000000;
+    e.timestamp_ms = now_ms();
     e.seq = 1;
 
     auto result = v.validate(e);
@@ -56,7 +62,7 @@ void test_missing_device_id() {
     e.device_id = "";
     e.lat = 10.0;
     e.lon = 106.0;
-    e.timestamp_ms = 1700000000000;
+    e.timestamp_ms = now_ms();
     e.seq = 1;
 
     auto result = v.validate(e);
@@ -73,7 +79,7 @@ void test_batch_size_limit() {
     e.device_id = "dev-1";
     e.lat = 10.0;
     e.lon = 106.0;
-    e.timestamp_ms = 1700000000000;
+    e.timestamp_ms = now_ms();
     e.seq = 1;
 
     auto results = v.validate_batch({e, e, e});  // 3 > max 2

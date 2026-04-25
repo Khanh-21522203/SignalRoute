@@ -1,4 +1,5 @@
 #include "fence_registry.h"
+#include <mutex>
 
 namespace signalroute {
 

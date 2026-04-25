@@ -5,7 +5,7 @@
  */
 
 // #include <gtest/gtest.h>
-#include "../src/common/spatial/haversine.h"
+#include "common/spatial/haversine.h"
 #include <cassert>
 #include <cmath>
 #include <iostream>

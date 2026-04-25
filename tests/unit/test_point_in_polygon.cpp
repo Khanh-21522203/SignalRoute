@@ -4,7 +4,7 @@
  * TODO: Integrate with Google Test or Catch2
  */
 
-#include "../src/geofence/point_in_polygon.h"
+#include "geofence/point_in_polygon.h"
 #include <cassert>
 #include <iostream>
 

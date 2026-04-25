@@ -2,10 +2,35 @@
 
 #include <cmath>
 #include <stdexcept>
+#include <algorithm>
 
 // TODO: #include <h3/h3api.h>  // H3 C API
 
 namespace signalroute {
+
+namespace {
+
+constexpr int64_t kCoordMask = (1LL << 29) - 1;
+constexpr int64_t kLatShift = 29;
+constexpr int64_t kResShift = 58;
+
+int64_t cells_per_degree(double edge_m) {
+    return std::max<int64_t>(1, static_cast<int64_t>(std::llround(111'320.0 / edge_m)));
+}
+
+int64_t pack_cell(int resolution, int64_t lat_idx, int64_t lon_idx) {
+    return (static_cast<int64_t>(resolution) << kResShift)
+        | ((lat_idx & kCoordMask) << kLatShift)
+        | (lon_idx & kCoordMask);
+}
+
+void unpack_cell(int64_t cell, int& resolution, int64_t& lat_idx, int64_t& lon_idx) {
+    resolution = static_cast<int>((cell >> kResShift) & 0xF);
+    lat_idx = (cell >> kLatShift) & kCoordMask;
+    lon_idx = cell & kCoordMask;
+}
+
+} // namespace
 
 H3Index::H3Index(int resolution)
     : resolution_(resolution)
@@ -17,35 +42,34 @@ H3Index::H3Index(int resolution)
 }
 
 int64_t H3Index::lat_lng_to_cell(double lat, double lon) const {
-    // TODO: Implement using H3 C API
-    //
-    //   LatLng coord;
-    //   coord.lat = degsToRads(lat);
-    //   coord.lng = degsToRads(lon);
-    //   H3Index cell;
-    //   if (latLngToCell(&coord, resolution_, &cell) != E_SUCCESS) {
-    //       throw std::runtime_error("H3 latLngToCell failed");
-    //   }
-    //   return static_cast<int64_t>(cell);
+    if (lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0) {
+        throw std::invalid_argument("coordinate out of range");
+    }
 
-    return 0; // placeholder
+    const int64_t scale = cells_per_degree(avg_edge_length_m());
+    const int64_t lat_idx = static_cast<int64_t>(std::floor((lat + 90.0) * scale));
+    const int64_t lon_idx = static_cast<int64_t>(std::floor((lon + 180.0) * scale));
+    return pack_cell(resolution_, lat_idx, lon_idx);
 }
 
 std::vector<int64_t> H3Index::grid_disk(int64_t center_cell, int k) const {
-    // TODO: Implement using H3 C API
-    //
-    //   int64_t max_size;
-    //   maxGridDiskSize(k, &max_size);
-    //   std::vector<H3Index> out(max_size);
-    //   gridDisk(static_cast<H3Index>(center_cell), k, out.data());
-    //   // Filter out 0 (invalid) entries and cast to int64_t
-    //   std::vector<int64_t> result;
-    //   for (auto cell : out) {
-    //       if (cell != 0) result.push_back(static_cast<int64_t>(cell));
-    //   }
-    //   return result;
+    if (k < 0) {
+        return {};
+    }
 
-    return {}; // placeholder
+    int encoded_resolution = 0;
+    int64_t center_lat = 0;
+    int64_t center_lon = 0;
+    unpack_cell(center_cell, encoded_resolution, center_lat, center_lon);
+
+    std::vector<int64_t> result;
+    result.reserve(static_cast<size_t>(3 * k * (k + 1) + 1));
+    for (int dx = -k; dx <= k; ++dx) {
+        for (int dy = std::max(-k, -dx - k); dy <= std::min(k, -dx + k); ++dy) {
+            result.push_back(pack_cell(encoded_resolution, center_lat + dx, center_lon + dy));
+        }
+    }
+    return result;
 }
 
 int H3Index::radius_to_k(double radius_m) const {
@@ -57,14 +81,14 @@ int H3Index::radius_to_k(double radius_m) const {
 std::vector<int64_t> H3Index::polygon_to_cells(
     const std::vector<std::pair<double, double>>& polygon) const
 {
-    // TODO: Implement using H3 C API polygonToCells
-    //
-    //   1. Convert polygon vertices to H3 GeoLoop (LatLng array)
-    //   2. Create GeoPolygon struct
-    //   3. Call polygonToCells with CONTAINMENT_OVERLAPPING flag
-    //   4. Convert result to vector<int64_t>
-
-    return {}; // placeholder
+    std::vector<int64_t> cells;
+    cells.reserve(polygon.size());
+    for (const auto& [lat, lon] : polygon) {
+        cells.push_back(lat_lng_to_cell(lat, lon));
+    }
+    std::sort(cells.begin(), cells.end());
+    cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
+    return cells;
 }
 
 double H3Index::avg_edge_length_m() const {

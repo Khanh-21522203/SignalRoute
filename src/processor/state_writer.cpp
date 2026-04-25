@@ -1,25 +1,30 @@
 #include "state_writer.h"
 #include "../common/types/device_state.h"
+#include <chrono>
 
 namespace signalroute {
 
 StateWriter::StateWriter(RedisClient& redis, H3Index& h3, int device_ttl_s)
     : redis_(redis), h3_(h3), device_ttl_s_(device_ttl_s) {}
 
-bool StateWriter::write(const LocationEvent& /*event*/) {
-    // TODO: Implement the full state write sequence
-    //
-    //   1. Encode H3 cell: int64_t new_cell = h3_.lat_lng_to_cell(event.lat, event.lon);
-    //   2. Build DeviceState from event
-    //   3. CAS update: bool accepted = redis_.update_device_state_cas(event.device_id, state, device_ttl_s_);
-    //   4. If accepted, check if cell changed:
-    //      auto old_state = redis_.get_device_state(event.device_id);
-    //      if (old_state && old_state->h3_cell != new_cell) {
-    //          redis_.remove_device_from_cell(old_state->h3_cell, event.device_id);
-    //      }
-    //      redis_.add_device_to_cell(new_cell, event.device_id);
-    //   5. Return accepted
-    return false;
+bool StateWriter::write(const LocationEvent& event) {
+    DeviceState state;
+    state.device_id = event.device_id;
+    state.lat = event.lat;
+    state.lon = event.lon;
+    state.altitude_m = event.altitude_m;
+    state.accuracy_m = event.accuracy_m;
+    state.speed_ms = event.speed_ms;
+    state.heading_deg = event.heading_deg;
+    state.h3_cell = h3_.lat_lng_to_cell(event.lat, event.lon);
+    state.seq = event.seq;
+    state.updated_at = event.server_recv_ms;
+    if (state.updated_at == 0) {
+        const auto now = std::chrono::system_clock::now().time_since_epoch();
+        state.updated_at = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+    }
+
+    return redis_.update_device_state_cas(event.device_id, state, device_ttl_s_);
 }
 
 } // namespace signalroute

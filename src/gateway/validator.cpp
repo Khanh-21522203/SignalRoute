@@ -1,15 +1,17 @@
 #include "validator.h"
 #include <chrono>
+#include <cmath>
 
 namespace signalroute {
 
 Validator::Validator(const GatewayConfig& config) : config_(config) {}
 
 Result<void, std::string> Validator::validate(const LocationEvent& event) const {
-    // TODO: Implement all validation checks
-
     if (event.device_id.empty()) {
         return Result<void, std::string>::err("device_id is required");
+    }
+    if (!std::isfinite(event.lat) || !std::isfinite(event.lon)) {
+        return Result<void, std::string>::err("coordinates must be finite");
     }
     if (event.lat < -90.0 || event.lat > 90.0) {
         return Result<void, std::string>::err("lat out of range [-90, 90]");
@@ -20,13 +22,21 @@ Result<void, std::string> Validator::validate(const LocationEvent& event) const 
     if (event.seq == 0) {
         return Result<void, std::string>::err("seq must be > 0");
     }
+    if (event.accuracy_m < 0.0f) {
+        return Result<void, std::string>::err("accuracy_m must be >= 0");
+    }
 
-    // TODO: Timestamp validation
-    //   auto now = std::chrono::system_clock::now().time_since_epoch();
-    //   auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
-    //   if (event.timestamp_ms > now_ms + config_.timestamp_skew_tolerance_s * 1000) {
-    //       return Result<void, std::string>::err("timestamp is in the future");
-    //   }
+    const auto now = std::chrono::system_clock::now().time_since_epoch();
+    const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+    if (event.timestamp_ms <= 0) {
+        return Result<void, std::string>::err("timestamp_ms is required");
+    }
+    if (event.timestamp_ms > now_ms + static_cast<int64_t>(config_.timestamp_skew_tolerance_s) * 1000) {
+        return Result<void, std::string>::err("timestamp is in the future");
+    }
+    if (event.timestamp_ms < now_ms - 24LL * 60 * 60 * 1000) {
+        return Result<void, std::string>::err("timestamp is too old");
+    }
 
     return Result<void, std::string>::ok();
 }

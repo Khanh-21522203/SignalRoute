@@ -17,6 +17,7 @@
 #include <functional>
 #include <optional>
 #include <cstdint>
+#include <atomic>
 
 namespace signalroute {
 
