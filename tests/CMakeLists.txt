@@ -10,6 +10,10 @@ add_executable(test_validator unit/test_validator.cpp)
 target_link_libraries(test_validator PRIVATE sr_gateway)
 add_test(NAME test_validator COMMAND test_validator)
 
-add_executable(test_phase0_smoke unit/test_phase0_smoke.cpp)
-target_link_libraries(test_phase0_smoke PRIVATE sr_common sr_processor sr_query)
-add_test(NAME test_phase0_smoke COMMAND test_phase0_smoke)
+add_executable(test_event_bus unit/test_event_bus.cpp)
+target_link_libraries(test_event_bus PRIVATE sr_common)
+add_test(NAME test_event_bus COMMAND test_event_bus)
+
+add_executable(test_location_state_query unit/test_location_state_query.cpp)
+target_link_libraries(test_location_state_query PRIVATE sr_common sr_processor sr_query)
+add_test(NAME test_location_state_query COMMAND test_location_state_query)

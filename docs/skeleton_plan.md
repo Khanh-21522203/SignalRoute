@@ -84,6 +84,9 @@ SignalRoute/
 │   │   │   ├── device_state.h
 │   │   │   ├── geofence_types.h
 │   │   │   └── result.h                    # Result<T, E> error handling
+│   │   ├── events/
+│   │   │   ├── event_bus.h                 # Typed in-process observer bus
+│   │   │   └── location_events.h           # Location/state event payloads
 │   │   ├── spatial/
 │   │   │   ├── h3_index.h                  # H3 encoding, k-ring, polyfill
 │   │   │   ├── h3_index.cpp
@@ -201,11 +204,54 @@ SignalRoute/
 |---|---|---|
 | `config/` | Parse TOML config, provide typed access to all sections (`[server]`, `[kafka]`, `[redis]`, etc.) | Make service-level decisions; contain business logic |
 | `types/` | Define domain types: `LocationEvent`, `DeviceState`, `GeofenceRule`, `Result<T,E>` | Implement serialization to/from external formats (that's proto's job) |
+| `events/` | Typed in-process event bus and event payloads for Observer-style component communication | Provide durability, cross-process messaging, or replace Kafka |
 | `spatial/` | H3 encoding/decoding, k-ring expansion, polyfill, haversine distance | Own any state; talk to Redis or PostGIS |
 | `metrics/` | Prometheus metric registration, increment, export | Business-level alerting logic |
 | `clients/redis` | Redis connection pool, pipelined commands, Lua script execution | Own business key schemas (that's the caller's responsibility) |
 | `clients/postgres` | libpq connection pool, prepared statements, batch insert | Own SQL schema or migrations |
 | `kafka/` | Producer/consumer wrappers with config, batching, offset management | Own topic names or partition logic (configured externally) |
+
+---
+
+### 3.1.1 In-Process Event Communication
+
+Components communicate inside one process using typed Observer-style events, similar to C# events/delegates. This is a framework composition mechanism, not a durable queue.
+
+```mermaid
+flowchart LR
+    Processor["Processor publishes LocationAccepted"]
+    StateWriter["StateWriter subscribes"]
+    HistoryWriter["HistoryWriter subscribes"]
+    GeofenceEngine["GeofenceEngine subscribes to StateWriteSucceeded"]
+    Metrics["Metrics subscribes to all observed events"]
+
+    Processor --> StateWriter
+    Processor --> HistoryWriter
+    StateWriter --> GeofenceEngine
+    Processor --> Metrics
+    StateWriter --> Metrics
+    HistoryWriter --> Metrics
+    GeofenceEngine --> Metrics
+```
+
+Rules:
+- Publish typed C++ event payloads, not string event names.
+- Wire subscriptions in the process composition root during startup.
+- Keep handlers small; use Kafka or persistence for durable cross-process outcomes.
+- Publishers should not depend on concrete subscriber classes.
+- Kafka remains the durable event log for service boundaries and replay.
+
+Initial event examples:
+- `LocationReceived`
+- `LocationValidated`
+- `LocationAccepted`
+- `LocationDuplicateRejected`
+- `LocationStaleRejected`
+- `StateWriteSucceeded`
+- `StateWriteRejected`
+- `TripHistoryWritten`
+- `TripHistoryWriteFailed`
+- `GeofenceEvaluationRequested`
 
 ---
 
@@ -874,7 +920,8 @@ A single `EVALSHA` call atomically reads `last_seq` and conditionally writes, el
 | Component | Phase 0 | Phase 1+ |
 |-----------|---------|----------|
 | Event queue | Kafka (required from Phase 0) | Kafka (scaled partitions) |
-| Service communication | Direct function calls (same process) | gRPC |
+| In-process component communication | Typed EventBus callbacks | Typed EventBus callbacks |
+| Service communication | Direct function calls / EventBus (same process) | gRPC between roles, EventBus inside each role |
 | State Store | External Redis (required from Phase 0) | Redis Cluster |
 | History Store | External PostGIS (required from Phase 0) | PostGIS with read replicas |
 | Matching Server | Included in Phase 0 skeleton | Strategy plugins + A/B routing |
@@ -898,7 +945,7 @@ A single `EVALSHA` call atomically reads `last_seq` and conditionally writes, el
 > **Phase 0 scope:** Matching Server is **included** in Phase 0 skeleton.
 
 > [!NOTE]
-> **Event queue:** Kafka is required from day one. No in-process queue abstraction.
+> **Event queue:** Kafka is required for durable cross-process messaging. The in-process EventBus is only for local component composition and does not replace Kafka.
 
 ---
 
