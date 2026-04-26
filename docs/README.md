@@ -90,7 +90,7 @@ The repository currently contains a dependency-free fallback runtime that proves
 | Storage adapters | Redis and PostGIS clients expose deterministic in-memory fallback behavior for unit and lifecycle tests |
 | Transport adapter | Kafka producer/consumer expose deterministic in-memory fallback behavior; production Kafka is still pending |
 | Payload format | Gateway and processor use an internal CSV payload only as temporary fallback test scaffolding; production protobuf serialization is still pending |
-| Protobuf boundary | Domain-to-wire conversion contracts exist under `src/common/proto/`; generated protobuf serialization is still pending |
+| Protobuf boundary | Domain-to-wire conversion contracts exist under `src/common/proto/`; generated protobuf message builds are available with `SR_ENABLE_PROTOBUF=ON`; Kafka protobuf serialization is still pending |
 | Spatial adapter | H3 interface exists with deterministic fallback cells; production H3 integration is still pending |
 | Services | Gateway, processor, query, geofence, and matching lifecycle paths are wired enough for fallback tests |
 | Workers | H3 cleanup, DLQ replay, and metrics reporter have deterministic `run_once` flows and event publication |

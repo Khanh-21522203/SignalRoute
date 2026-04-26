@@ -1,7 +1,7 @@
 # SignalRoute Dependency Strategy
 
 ## Purpose
-Batch 17 established the build contract for production dependencies without replacing the fallback runtime. Batch 18 adds domain-to-wire conversion contracts that mirror the protobuf schemas while still compiling without generated protobuf code.
+Batch 17 established the build contract for production dependencies without replacing the fallback runtime. Batch 18 added domain-to-wire conversion contracts. Batch 19 adds protobuf-only generated builds and keeps gRPC stubs optional because local gRPC packages may not be installed.
 
 ## Default Build Mode
 The default build is fallback mode:
@@ -30,7 +30,9 @@ The provider value does not install dependencies by itself. It records the inten
 
 | Option | Default | Required package target intent | Unblocks |
 |---|---:|---|---|
-| `SR_ENABLE_PROTOBUF_GRPC` | `OFF` | `protobuf::libprotobuf`, `protobuf::protoc`, `gRPC::grpc++`, `gRPC::grpc_cpp_plugin` | Generated proto APIs, gRPC gateway/query/admin services, protobuf Kafka payloads |
+| `SR_ENABLE_PROTOBUF` | `OFF` | `protobuf::libprotobuf`, `protobuf::protoc` | Generated protobuf message APIs and protobuf Kafka payload tests |
+| `SR_ENABLE_GRPC` | `OFF` | `gRPC::grpc++`, `gRPC::grpc_cpp_plugin`; requires `SR_ENABLE_PROTOBUF=ON` | Generated gRPC gateway/query/admin service stubs |
+| `SR_ENABLE_PROTOBUF_GRPC` | `OFF` | Compatibility switch that enables both `SR_ENABLE_PROTOBUF` and `SR_ENABLE_GRPC` | One-switch generated protobuf plus gRPC builds |
 | `SR_ENABLE_REAL_H3` | `OFF` | `h3::h3` or `h3` | Real H3 cell encoding, grid disk, polygon covering |
 | `SR_ENABLE_REAL_REDIS` | `OFF` | `hiredis::hiredis`, `redis++::redis++` | Real state, H3 index, fence state, reservations |
 | `SR_ENABLE_REAL_POSTGIS` | `OFF` | `PostgreSQL::PostgreSQL` | Real trip history, spatial queries, geofence repositories |
@@ -44,9 +46,11 @@ The provider value does not install dependencies by itself. It records the inten
 - `sr_dependencies` is the central interface target for production dependencies.
 - `signalroute_proto` always exists:
   - fallback mode: interface target with no generated files;
-  - protobuf/gRPC mode: static library generated from `proto/signalroute/*.proto`.
+  - protobuf mode: static library generated from `proto/signalroute/*.proto`;
+  - gRPC mode: adds generated `.grpc.pb.*` sources to the same target.
 - `sr_common` links `sr_dependencies` and `signalroute_proto`, so adapter code can use stable compile definitions.
 - `src/common/proto/` owns dependency-free wire-shape structs and domain conversion helpers. Generated protobuf types should adapt to these helpers instead of leaking through service/domain code.
+- `.proto` files use package `signalroute.v1`, producing generated C++ types under `signalroute::v1`. This intentionally avoids name collisions with domain types such as `signalroute::LocationEvent`.
 
 ## Adapter Rule
 Do not remove fallback behavior when enabling a real dependency. Each production adapter must:
@@ -58,9 +62,9 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 - keep generated protobuf includes out of domain headers. Generated types belong at API/transport boundaries.
 
 ## Recommended Implementation Order
-1. Enable protobuf/gRPC generation against the existing `signalroute_proto` target.
-2. Adapt generated protobuf messages to the `src/common/proto/` conversion contracts.
-3. Implement protobuf Kafka payload serialization for location, geofence, matching, and DLQ payloads.
+1. Adapt generated protobuf messages to the `src/common/proto/` conversion contracts.
+2. Implement protobuf Kafka payload serialization for location, geofence, matching, and DLQ payloads.
+3. Enable gRPC service stub generation once `gRPC::grpc++` and `gRPC::grpc_cpp_plugin` are available.
 4. Replace the deterministic H3 fallback behind `H3Index`.
 5. Add Redis integration behind `RedisClient`.
 6. Add PostGIS integration behind `PostgresClient`.
@@ -73,8 +77,10 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | Build | Command | Expected |
 |---|---|---|
 | Fallback default | `cmake -S . -B /tmp/signalroute-build -DSR_BUILD_TESTS=ON` | Configure succeeds without external packages |
+| Protobuf generated messages | `cmake -S . -B /tmp/signalroute-protobuf-build -DSR_BUILD_TESTS=ON -DSR_ENABLE_PROTOBUF=ON` | Configure/build succeeds when protobuf is available and runs generated protobuf round-trip tests |
+| gRPC missing | `cmake -S . -B /tmp/signalroute-grpc-missing -DSR_ENABLE_PROTOBUF=ON -DSR_ENABLE_GRPC=ON` | Configure fails clearly if gRPC package is unavailable |
 | Production dependency missing | `cmake -S . -B /tmp/signalroute-h3 -DSR_ENABLE_REAL_H3=ON` | Configure fails at package discovery with a clear missing package error |
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
 
 ## Current Boundary
-Batch 18 prepares conversion contracts and tests. It does not implement real protobuf serialization, install packages, remove CSV fallback parsing, or change runtime behavior.
+Batch 19 generates and tests protobuf messages when protobuf is available. It does not implement Kafka protobuf serialization, install packages, remove CSV fallback parsing, or add gRPC service implementations.

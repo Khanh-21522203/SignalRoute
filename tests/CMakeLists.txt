@@ -51,6 +51,12 @@ add_executable(test_proto_domain_conversions unit/test_proto_domain_conversions.
 target_link_libraries(test_proto_domain_conversions PRIVATE sr_common)
 add_test(NAME test_proto_domain_conversions COMMAND test_proto_domain_conversions)
 
+if(SR_ENABLE_PROTOBUF)
+    add_executable(test_generated_protobuf_roundtrip unit/test_generated_protobuf_roundtrip.cpp)
+    target_link_libraries(test_generated_protobuf_roundtrip PRIVATE signalroute_proto)
+    add_test(NAME test_generated_protobuf_roundtrip COMMAND test_generated_protobuf_roundtrip)
+endif()
+
 add_executable(test_redis_client unit/test_redis_client.cpp)
 target_link_libraries(test_redis_client PRIVATE sr_common)
 add_test(NAME test_redis_client COMMAND test_redis_client)

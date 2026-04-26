@@ -97,7 +97,7 @@ An agent must report:
 ### 6. Dependency Order
 Start remaining production work in this order unless deliberately coordinated:
 
-1. Protobuf/gRPC generation against the existing conversion boundary
+1. Generated protobuf-to-domain adapters and Kafka payload serialization
 2. Real Kafka producer/consumer adapters and protobuf payload serialization
 3. Real H3 adapter behind the existing `H3Index` interface
 4. Real Redis adapter behind the existing state/fence/reservation contract
@@ -132,4 +132,4 @@ Do not run these at the same time without coordination:
 - CMake dependency strategy and any task adding external dependencies
 
 ## Next Recommended Implementation Task
-Enable generated protobuf/gRPC builds behind `SR_ENABLE_PROTOBUF_GRPC` and adapt generated messages through `src/common/proto/`. Do not remove CSV parsing until Kafka protobuf round-trip tests exist.
+Add generated protobuf-to-domain adapters through `src/common/proto/`, then add Kafka protobuf payload round-trip tests. Do not remove CSV parsing until those Kafka tests pass. gRPC service stubs remain gated behind `SR_ENABLE_GRPC`.
