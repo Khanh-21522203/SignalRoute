@@ -16,6 +16,10 @@ add_library(sr_common STATIC
     composition/metrics_event_handlers.cpp
 )
 
+if(SR_ENABLE_PROTOBUF)
+    target_sources(sr_common PRIVATE proto/generated_conversions.cpp)
+endif()
+
 target_include_directories(sr_common PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/..    # So services can #include "common/..."
 )

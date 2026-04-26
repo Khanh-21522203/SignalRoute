@@ -55,6 +55,14 @@ if(SR_ENABLE_PROTOBUF)
     add_executable(test_generated_protobuf_roundtrip unit/test_generated_protobuf_roundtrip.cpp)
     target_link_libraries(test_generated_protobuf_roundtrip PRIVATE signalroute_proto)
     add_test(NAME test_generated_protobuf_roundtrip COMMAND test_generated_protobuf_roundtrip)
+
+    add_executable(test_generated_proto_domain_adapters unit/test_generated_proto_domain_adapters.cpp)
+    target_link_libraries(test_generated_proto_domain_adapters PRIVATE sr_common)
+    add_test(NAME test_generated_proto_domain_adapters COMMAND test_generated_proto_domain_adapters)
+
+    add_executable(test_kafka_protobuf_payloads unit/test_kafka_protobuf_payloads.cpp)
+    target_link_libraries(test_kafka_protobuf_payloads PRIVATE sr_common)
+    add_test(NAME test_kafka_protobuf_payloads COMMAND test_kafka_protobuf_payloads)
 endif()
 
 add_executable(test_redis_client unit/test_redis_client.cpp)
