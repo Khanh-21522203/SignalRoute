@@ -26,6 +26,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Worker fallback `run_once` flows for H3 cleanup, DLQ replay, and metrics export.
 - Fallback-first dependency build switches in `cmake/SignalRouteOptions.cmake` and central discovery/linking in `cmake/SignalRouteDependencies.cmake`.
 - Stable `signalroute_proto` target that is an interface target in fallback mode and generated protobuf/gRPC library when `SR_ENABLE_PROTOBUF_GRPC=ON`.
+- Dependency-free domain-to-wire conversion contracts under `src/common/proto/` for location, query device state, geofence events, and matching request/result payloads.
 
 ### Known Boundaries
 - Kafka, Redis, PostGIS, gRPC, real H3, Prometheus, and protobuf generation are not integrated.
@@ -229,6 +230,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task G2: Protobuf Generation And Conversion
 - **Ownership:** `proto/`, generated build wiring, conversion tests.
+- **Status:** Conversion contracts done in fallback mode; generated protobuf/gRPC build and serialization round-trip tests pending.
 - **Goal:** Enable protobuf/gRPC generation and domain conversion.
 - **Items:** CMake generation, proto library, conversion helpers, serialization tests.
 - **Depends on:** C2.

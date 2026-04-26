@@ -11,6 +11,7 @@ add_library(sr_common STATIC
     clients/postgres_client.cpp
     kafka/kafka_producer.cpp
     kafka/kafka_consumer.cpp
+    proto/domain_conversions.cpp
     composition/composition_root.cpp
     composition/metrics_event_handlers.cpp
 )

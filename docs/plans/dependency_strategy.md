@@ -1,7 +1,7 @@
 # SignalRoute Dependency Strategy
 
 ## Purpose
-Batch 17 establishes the build contract for production dependencies without replacing the fallback runtime. All external adapters stay opt-in until each adapter has equivalent feature and integration tests.
+Batch 17 established the build contract for production dependencies without replacing the fallback runtime. Batch 18 adds domain-to-wire conversion contracts that mirror the protobuf schemas while still compiling without generated protobuf code.
 
 ## Default Build Mode
 The default build is fallback mode:
@@ -46,6 +46,7 @@ The provider value does not install dependencies by itself. It records the inten
   - fallback mode: interface target with no generated files;
   - protobuf/gRPC mode: static library generated from `proto/signalroute/*.proto`.
 - `sr_common` links `sr_dependencies` and `signalroute_proto`, so adapter code can use stable compile definitions.
+- `src/common/proto/` owns dependency-free wire-shape structs and domain conversion helpers. Generated protobuf types should adapt to these helpers instead of leaking through service/domain code.
 
 ## Adapter Rule
 Do not remove fallback behavior when enabling a real dependency. Each production adapter must:
@@ -54,16 +55,18 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 - add integration tests grouped by feature;
 - fail clearly when enabled without the required package;
 - avoid changing CSV fallback payload semantics until protobuf Kafka serialization is ready.
+- keep generated protobuf includes out of domain headers. Generated types belong at API/transport boundaries.
 
 ## Recommended Implementation Order
-1. Enable protobuf/gRPC generation and add domain conversion tests.
-2. Implement protobuf Kafka payload serialization for location, geofence, matching, and DLQ payloads.
-3. Replace the deterministic H3 fallback behind `H3Index`.
-4. Add Redis integration behind `RedisClient`.
-5. Add PostGIS integration behind `PostgresClient`.
-6. Add librdkafka integration behind `KafkaProducer` and `KafkaConsumer`.
-7. Add gRPC gateway/query/admin services on top of existing handlers.
-8. Add Prometheus exporter and health/readiness endpoints.
+1. Enable protobuf/gRPC generation against the existing `signalroute_proto` target.
+2. Adapt generated protobuf messages to the `src/common/proto/` conversion contracts.
+3. Implement protobuf Kafka payload serialization for location, geofence, matching, and DLQ payloads.
+4. Replace the deterministic H3 fallback behind `H3Index`.
+5. Add Redis integration behind `RedisClient`.
+6. Add PostGIS integration behind `PostgresClient`.
+7. Add librdkafka integration behind `KafkaProducer` and `KafkaConsumer`.
+8. Add gRPC gateway/query/admin services on top of existing handlers.
+9. Add Prometheus exporter and health/readiness endpoints.
 
 ## Verification Matrix
 
@@ -74,4 +77,4 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
 
 ## Current Boundary
-Batch 17 only prepares dependency switches and generation structure. It does not implement real adapters, install packages, or change runtime behavior.
+Batch 18 prepares conversion contracts and tests. It does not implement real protobuf serialization, install packages, remove CSV fallback parsing, or change runtime behavior.

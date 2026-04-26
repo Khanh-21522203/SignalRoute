@@ -47,6 +47,10 @@ add_executable(test_domain_types unit/test_domain_types.cpp)
 target_link_libraries(test_domain_types PRIVATE sr_common)
 add_test(NAME test_domain_types COMMAND test_domain_types)
 
+add_executable(test_proto_domain_conversions unit/test_proto_domain_conversions.cpp)
+target_link_libraries(test_proto_domain_conversions PRIVATE sr_common)
+add_test(NAME test_proto_domain_conversions COMMAND test_proto_domain_conversions)
+
 add_executable(test_redis_client unit/test_redis_client.cpp)
 target_link_libraries(test_redis_client PRIVATE sr_common)
 add_test(NAME test_redis_client COMMAND test_redis_client)

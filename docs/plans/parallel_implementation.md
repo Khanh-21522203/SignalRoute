@@ -13,6 +13,7 @@ This file defines the preparation required before running multiple agents or dev
 - Gateway/processor/DLQ fallback payload parsing uses internal CSV only for tests. Protobuf/Kafka serialization remains a production integration task.
 - Redis, PostGIS, Kafka, H3, and metrics adapters currently have deterministic in-memory fallback behavior for unit and lifecycle tests.
 - Processor/geofence/metrics observer wiring is implemented for in-process fallback composition.
+- Domain-to-wire conversion contracts live under `src/common/proto/`; generated protobuf code should adapt through that boundary.
 
 ## Required Before Parallel Work
 
@@ -96,7 +97,7 @@ An agent must report:
 ### 6. Dependency Order
 Start remaining production work in this order unless deliberately coordinated:
 
-1. Protobuf/gRPC generation and domain conversion boundaries
+1. Protobuf/gRPC generation against the existing conversion boundary
 2. Real Kafka producer/consumer adapters and protobuf payload serialization
 3. Real H3 adapter behind the existing `H3Index` interface
 4. Real Redis adapter behind the existing state/fence/reservation contract
@@ -131,4 +132,4 @@ Do not run these at the same time without coordination:
 - CMake dependency strategy and any task adding external dependencies
 
 ## Next Recommended Implementation Task
-Enable protobuf/gRPC generation behind `SR_ENABLE_PROTOBUF_GRPC`, then add domain conversion tests before replacing CSV fallback payloads. Do not remove CSV parsing until Kafka protobuf round-trip tests exist.
+Enable generated protobuf/gRPC builds behind `SR_ENABLE_PROTOBUF_GRPC` and adapt generated messages through `src/common/proto/`. Do not remove CSV parsing until Kafka protobuf round-trip tests exist.
