@@ -6,6 +6,7 @@
 #include <cassert>
 #include <chrono>
 #include <iostream>
+#include <limits>
 #include <string>
 
 namespace {
@@ -64,6 +65,26 @@ void test_applies_limit() {
     assert(result.devices.size() == 1);
 }
 
+void test_clamps_radius_and_default_limit_to_config() {
+    signalroute::RedisClient redis(signalroute::RedisConfig{});
+    signalroute::H3Index h3(7);
+    signalroute::StateWriter writer(redis, h3, 3600);
+    signalroute::SpatialConfig cfg;
+    cfg.nearby_max_radius_m = 1000.0;
+    cfg.nearby_max_results = 1;
+
+    assert(writer.write(make_event("near", 10.8231, 106.6297, 1)));
+    assert(writer.write(make_event("also-near", 10.8232, 106.6298, 1)));
+    assert(writer.write(make_event("far", 10.9000, 106.7000, 1)));
+
+    signalroute::NearbyHandler handler(redis, h3, cfg);
+    auto result = handler.handle(10.8231, 106.6297, 50000.0, 0, 60);
+
+    assert(result.total_in_radius == 2);
+    assert(result.devices.size() == 1);
+    assert(result.devices.front().second <= 1000.0);
+}
+
 void test_applies_freshness_filter() {
     signalroute::RedisClient redis(signalroute::RedisConfig{});
     signalroute::H3Index h3(7);
@@ -85,11 +106,29 @@ void test_applies_freshness_filter() {
     assert(result.devices[0].first.device_id == "fresh");
 }
 
+void test_invalid_inputs_return_empty_result() {
+    signalroute::RedisClient redis(signalroute::RedisConfig{});
+    signalroute::H3Index h3(7);
+    signalroute::SpatialConfig cfg;
+    cfg.nearby_max_radius_m = 50000.0;
+    cfg.nearby_max_results = 100;
+    signalroute::NearbyHandler handler(redis, h3, cfg);
+
+    assert(handler.handle(91.0, 106.6297, 500.0, 10, 60).devices.empty());
+    assert(handler.handle(10.8231, 181.0, 500.0, 10, 60).devices.empty());
+    assert(handler.handle(10.8231, 106.6297, 0.0, 10, 60).devices.empty());
+    assert(handler.handle(10.8231, 106.6297,
+                          std::numeric_limits<double>::infinity(), 10, 60).devices.empty());
+    assert(handler.handle(10.8231, 106.6297, 500.0, 10, -1).devices.empty());
+}
+
 int main() {
     std::cout << "test_nearby_handler:\n";
     test_returns_devices_sorted_by_distance();
     test_applies_limit();
+    test_clamps_radius_and_default_limit_to_config();
     test_applies_freshness_filter();
+    test_invalid_inputs_return_empty_result();
     std::cout << "All nearby handler tests passed.\n";
     return 0;
 }

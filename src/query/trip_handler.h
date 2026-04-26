@@ -31,6 +31,15 @@ public:
         int64_t from_ts, int64_t to_ts,
         int sample_interval_s, int limit);
 
+    /**
+     * Query trip points for a device with a circular spatial filter.
+     */
+    std::vector<LocationEvent> handle_spatial(
+        const std::string& device_id,
+        int64_t from_ts, int64_t to_ts,
+        double center_lat, double center_lon, double radius_m,
+        int sample_interval_s, int limit);
+
 private:
     PostgresClient& pg_;
 };

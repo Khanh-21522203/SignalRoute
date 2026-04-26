@@ -3,6 +3,7 @@
 #include "../common/metrics/metrics.h"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 
 namespace signalroute {
 
@@ -13,11 +14,23 @@ NearbyResult NearbyHandler::handle(double lat, double lon, double radius_m,
                                     int limit, int last_seen_s) {
     NearbyResult result;
 
+    if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(radius_m) ||
+        lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0 ||
+        radius_m <= 0.0 || last_seen_s < 0) {
+        return result;
+    }
+
     if (radius_m > config_.nearby_max_radius_m) {
         radius_m = config_.nearby_max_radius_m;
     }
+    if (radius_m <= 0.0) {
+        return result;
+    }
     if (limit <= 0 || limit > config_.nearby_max_results) {
         limit = config_.nearby_max_results;
+    }
+    if (limit <= 0) {
+        return result;
     }
 
     int64_t center_cell = h3_.lat_lng_to_cell(lat, lon);
@@ -48,7 +61,12 @@ NearbyResult NearbyHandler::handle(double lat, double lon, double radius_m,
 
     result.total_in_radius = static_cast<int>(result.devices.size());
     std::sort(result.devices.begin(), result.devices.end(),
-        [](const auto& a, const auto& b) { return a.second < b.second; });
+        [](const auto& a, const auto& b) {
+            if (a.second != b.second) {
+                return a.second < b.second;
+            }
+            return a.first.device_id < b.first.device_id;
+        });
     if (static_cast<int>(result.devices.size()) > limit) {
         result.devices.resize(static_cast<size_t>(limit));
     }
