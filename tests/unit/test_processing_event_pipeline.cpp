@@ -4,6 +4,7 @@
 #include "common/composition/metrics_event_handlers.h"
 #include "common/kafka/kafka_consumer.h"
 #include "common/kafka/kafka_producer.h"
+#include "common/proto/geofence_payload_codec.h"
 #include "common/spatial/h3_index.h"
 #include "geofence/evaluator.h"
 #include "geofence/fence_registry.h"
@@ -78,6 +79,12 @@ signalroute::GeofenceRule square_rule(std::string fence_id, int64_t h3_cell) {
     };
     rule.active = true;
     return rule;
+}
+
+signalroute::GeofenceEventRecord decode_geofence_payload(const std::string& payload) {
+    auto decoded = signalroute::proto_boundary::decode_geofence_event_payload(payload);
+    assert(decoded.is_ok());
+    return decoded.value();
 }
 
 struct Harness {
@@ -179,7 +186,10 @@ void test_processing_loop_can_drive_state_history_and_geofence_through_events() 
 
     const auto geofence_msg = harness.geofence_consumer.poll(0);
     assert(geofence_msg.has_value());
-    assert(geofence_msg->payload.find("ENTER") != std::string::npos);
+    const auto published = decode_geofence_payload(geofence_msg->payload);
+    assert(published.device_id == "dev-1");
+    assert(published.fence_id == "fence-1");
+    assert(published.event_type == signalroute::GeofenceEventType::ENTER);
 }
 
 void test_duplicate_message_publishes_rejection_without_second_event_handler_write() {

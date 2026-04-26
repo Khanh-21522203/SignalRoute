@@ -17,9 +17,9 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - In-memory Kafka producer/consumer fallback with produce, poll, commit, callback, and lag behavior.
 - Redis fallback behavior for device state, H3 cell membership, fence state, reservations, TTL expiry, and stale H3 cleanup.
 - PostGIS fallback behavior for trip history, spatial trip filters, geofence rules, and geofence audit records.
-- Processor fallback flow with dedup, sequence guard, state/history fan-out, offset commits, and temporary CSV payload parsing.
+- Processor fallback flow with dedup, sequence guard, state/history fan-out, offset commits, and shared location payload decoding that uses protobuf when enabled and CSV as fallback.
 - In-process observer-style composition for processor -> state/history -> geofence -> metrics.
-- Gateway fallback ingest methods with validation, rate limiting, temporary CSV publish, and typed gateway events.
+- Gateway fallback ingest methods with validation, rate limiting, shared location payload encoding, and typed gateway events.
 - Query fallback service lifecycle for latest, nearby, trip, and spatial trip reads.
 - Geofence fallback evaluation for enter, exit, old-cell exit, dwell, audit, and event publication.
 - Matching fallback service lifecycle, reservation flow, nearest strategy, deadlines, cleanup, and typed matching events.
@@ -30,9 +30,9 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Protobuf package namespace is `signalroute.v1`, so generated C++ types live under `signalroute::v1` and do not collide with domain types under `signalroute`.
 
 ### Known Boundaries
-- Kafka, Redis, PostGIS, gRPC, real H3, Prometheus, and protobuf generation are not integrated.
+- Kafka, Redis, PostGIS, gRPC, real H3, and Prometheus are not integrated. Protobuf message generation is optional and integrated behind `SR_ENABLE_PROTOBUF`.
 - Production dependency switches exist but real adapter implementations still need to be written behind existing interfaces.
-- Gateway, processor, and DLQ replay currently use an internal CSV payload fallback for skeleton tests only; real Kafka payload serialization/deserialization must be protobuf-backed in Milestone 6.
+- Gateway, processor, geofence, matching codec, and DLQ replay boundaries now use shared payload codecs that emit protobuf when `SR_ENABLE_PROTOBUF=ON` and preserve CSV fallback decoding for skeleton tests. Real Kafka transport is still pending.
 - Gateway does not expose real gRPC/UDP endpoints yet.
 - Query service does not expose real gRPC/HTTP endpoints yet.
 - Event bus wiring is implemented for the processor/geofence/metrics fallback path, but cross-role production deployment still needs explicit durable Kafka/protobuf boundaries.
@@ -43,7 +43,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Keep external infrastructure behind interfaces so unit tests can run without Kafka/Redis/PostGIS.
 - Add integration tests separately from unit tests, grouped by feature: ingestion pipeline, state persistence, trip history, nearby query, geofence events, matching reservation.
 - Do not replace a working in-memory contract until the real adapter has equivalent tests.
-- Any fallback payload format, including gateway/processor CSV, is temporary test scaffolding and must not become the production Kafka wire contract.
+- Any CSV fallback payload format is temporary test scaffolding and must not become the production Kafka wire contract.
 - Every milestone must end with build, unit tests, relevant integration tests, and updated docs.
 
 ## In-Process Event Framework Architecture
@@ -231,7 +231,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task G2: Protobuf Generation And Conversion
 - **Ownership:** `proto/`, generated build wiring, conversion tests.
-- **Status:** Conversion contracts, generated protobuf adapters, generated message round-trip tests, and Kafka fallback protobuf payload round-trip tests done; runtime protobuf integration and generated gRPC stubs pending.
+- **Status:** Conversion contracts, generated protobuf adapters, generated message round-trip tests, Kafka fallback protobuf payload round-trip tests, gateway/processor runtime protobuf location payloads, geofence runtime event payloads, matching request/result payload codecs, and DLQ replay protobuf location decoding done; generated gRPC stubs pending.
 - **Goal:** Enable protobuf/gRPC generation and domain conversion.
 - **Items:** CMake generation, proto library, conversion helpers, serialization tests.
 - **Depends on:** C2.
@@ -250,7 +250,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 - **Status:** Done fallback and EventBus fan-out; processor runtime decodes protobuf location payloads when `SR_ENABLE_PROTOBUF=ON` and still accepts CSV fallback payloads.
 - **Goal:** Complete Kafka-to-state/history processing.
 - **Items:** deserialize, dedup, sequence guard, publish internal events, commit offsets, DLQ behavior.
-- **Current skeleton note:** `GatewayService` and `ProcessingLoop` may use the internal CSV fallback only for unit-test scaffolding until G2 protobuf conversion lands. Do not extend CSV as a durable or public Kafka payload format.
+- **Current skeleton note:** CSV remains only as default fallback-build scaffolding and decoder compatibility. Do not extend CSV as a durable or public Kafka payload format.
 - **Depends on:** A1/A2, E2, F2, G1/G2.
 - **Verification:** processor loop integration tests.
 
@@ -264,7 +264,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task K1: Geofence Registry And Evaluator
 - **Ownership:** `src/geofence/fence_registry.*`, `src/geofence/evaluator.*`, geofence tests.
-- **Status:** Done fallback; production H3/PostGIS/Kafka integration pending.
+- **Status:** Done fallback; runtime geofence event payloads use protobuf when enabled and CSV in default fallback builds; production H3/PostGIS/Kafka integration pending.
 - **Goal:** Complete event-driven geofence evaluation.
 - **Items:** registry reload, candidate lookup, old-cell exit checks, enter/exit events, audit writes, Kafka events.
 - **Depends on:** A1/A2, D1, E1, F1, G1.
@@ -272,7 +272,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task K2: Dwell Checker
 - **Ownership:** `src/geofence/dwell_checker.*`, dwell tests.
-- **Status:** Done fallback; production scheduling/indexing pending.
+- **Status:** Done fallback; runtime dwell event payloads use protobuf when enabled and CSV in default fallback builds; production scheduling/indexing pending.
 - **Goal:** Complete dwell transition behavior.
 - **Items:** inside state tracking, threshold detection, no duplicate dwell events, event publication.
 - **Depends on:** K1.
@@ -280,7 +280,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task L1: Matching Framework
 - **Ownership:** `src/matching/`, matching tests.
-- **Status:** Done fallback; Kafka/protobuf loop and integration tests pending.
+- **Status:** Done fallback; matching request/result payload codecs are ready; Kafka loop and integration tests pending.
 - **Goal:** Complete match context, strategy registry usage, reservations, and result flow.
 - **Items:** built-in nearest strategy, request deadline, reservation cleanup, result publishing, events.
 - **Depends on:** A1/A2, D2, E1, G1/G2.
@@ -288,7 +288,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task M1: Workers
 - **Ownership:** `src/workers/`, worker tests.
-- **Status:** Done fallback; production retry/backoff and external dependency integration pending.
+- **Status:** Done fallback; DLQ replay decodes shared location payloads, including protobuf when enabled; production retry/backoff and external dependency integration pending.
 - **Goal:** Complete cleanup, DLQ replay, and metrics worker behavior.
 - **Items:** H3 cleanup, DLQ replay, retry/backoff, event publication.
 - **Depends on:** A1/A2, E1, F1, G1.
@@ -490,7 +490,7 @@ Implement trip persistence, trip replay, spatial history filters, geofence rule 
 ### Goal
 Implement durable messaging and generated protobuf contracts.
 
-The internal CSV gateway/processor payload fallback exists only to test the skeleton ingestion and processor loops before protobuf generation is wired. This milestone must replace that fallback at the Kafka boundary with protobuf serialization/deserialization and keep domain code independent of generated protobuf types.
+Shared payload codecs now cover location, geofence events, matching request/result messages, and DLQ location replay. CSV remains only as fallback-build scaffolding and protobuf-build decoder compatibility. This milestone must still replace the in-memory Kafka fallback with real durable Kafka transport and keep domain code independent of generated protobuf types.
 
 ### Work Items
 - Enable protobuf and gRPC generation in CMake.
@@ -507,11 +507,11 @@ The internal CSV gateway/processor payload fallback exists only to test the skel
   - manual commit
   - rebalance callbacks
   - lag reporting
-- Implement location event serialization/deserialization.
-- Implement geofence event serialization.
-- Implement matching request/result serialization.
+- Implement location event serialization/deserialization. (Done for shared runtime codec; real Kafka adapter pending.)
+- Implement geofence event serialization. (Done for shared runtime codec; real Kafka adapter pending.)
+- Implement matching request/result serialization. (Done for shared runtime codec; matching Kafka loop pending.)
 - Add topic config validation.
-- Add DLQ payload format and replay metadata.
+- Add DLQ payload format and replay metadata. (Shared location payload replay done; retry metadata pending.)
 
 ### Acceptance Criteria
 - Location events round-trip through protobuf serialization.

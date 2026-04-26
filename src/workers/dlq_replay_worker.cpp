@@ -1,50 +1,12 @@
 #include "dlq_replay_worker.h"
 #include "../common/events/all_events.h"
 #include "../common/events/event_bus.h"
-#include <thread>
+#include "../common/proto/location_payload_codec.h"
+
 #include <chrono>
-#include <optional>
-#include <sstream>
-#include <string>
-#include <vector>
+#include <thread>
 
 namespace signalroute {
-namespace {
-
-std::vector<std::string> split_csv(const std::string& payload) {
-    std::vector<std::string> fields;
-    std::stringstream in(payload);
-    std::string field;
-    while (std::getline(in, field, ',')) {
-        fields.push_back(field);
-    }
-    return fields;
-}
-
-std::optional<LocationEvent> parse_location_payload(const std::string& payload) {
-    const auto fields = split_csv(payload);
-    if (fields.size() != 6) {
-        return std::nullopt;
-    }
-
-    try {
-        LocationEvent event;
-        event.device_id = fields[0];
-        event.seq = static_cast<uint64_t>(std::stoull(fields[1]));
-        event.timestamp_ms = std::stoll(fields[2]);
-        event.server_recv_ms = std::stoll(fields[3]);
-        event.lat = std::stod(fields[4]);
-        event.lon = std::stod(fields[5]);
-        if (event.device_id.empty()) {
-            return std::nullopt;
-        }
-        return event;
-    } catch (...) {
-        return std::nullopt;
-    }
-}
-
-} // namespace
 
 DLQReplayWorker::DLQReplayWorker(PostgresClient& pg, KafkaConsumer& consumer)
     : pg_(pg), consumer_(consumer) {}
@@ -64,14 +26,14 @@ DLQReplayResult DLQReplayWorker::run_once(int max_messages) {
             break;
         }
 
-        auto event = parse_location_payload(msg->payload);
-        if (!event) {
+        auto event = proto_boundary::decode_location_payload(msg->payload);
+        if (event.is_err()) {
             ++result.failed_messages;
             consumer_.commit(*msg);
             continue;
         }
 
-        pg_.batch_insert_trip_points({*event});
+        pg_.batch_insert_trip_points({event.value()});
         consumer_.commit(*msg);
         ++result.replayed_messages;
     }

@@ -2,6 +2,7 @@
 #include "common/clients/redis_client.h"
 #include "common/kafka/kafka_consumer.h"
 #include "common/kafka/kafka_producer.h"
+#include "common/proto/geofence_payload_codec.h"
 #include "geofence/evaluator.h"
 #include "geofence/fence_registry.h"
 
@@ -57,6 +58,12 @@ struct Harness {
     signalroute::Evaluator evaluator;
 };
 
+signalroute::GeofenceEventRecord decode_event_payload(const std::string& payload) {
+    auto decoded = signalroute::proto_boundary::decode_geofence_event_payload(payload);
+    assert(decoded.is_ok());
+    return decoded.value();
+}
+
 } // namespace
 
 void test_enter_transition_sets_state_audits_and_publishes() {
@@ -79,7 +86,11 @@ void test_enter_transition_sets_state_audits_and_publishes() {
     const auto msg = harness.consumer.poll(0);
     assert(msg.has_value());
     assert(msg->key == "dev-1");
-    assert(msg->payload.find("ENTER") != std::string::npos);
+    const auto published = decode_event_payload(msg->payload);
+    assert(published.device_id == "dev-1");
+    assert(published.fence_id == "fence-1");
+    assert(published.event_type == signalroute::GeofenceEventType::ENTER);
+    assert(published.event_ts_ms == 1000);
 }
 
 void test_inside_to_inside_does_not_emit_duplicate_enter() {
@@ -108,7 +119,11 @@ void test_exit_transition_sets_outside_audits_and_publishes() {
 
     const auto msg = harness.consumer.poll(0);
     assert(msg.has_value());
-    assert(msg->payload.find("EXIT") != std::string::npos);
+    const auto published = decode_event_payload(msg->payload);
+    assert(published.device_id == "dev-1");
+    assert(published.fence_id == "fence-1");
+    assert(published.event_type == signalroute::GeofenceEventType::EXIT);
+    assert(published.event_ts_ms == 2000);
 }
 
 void test_old_cell_candidates_allow_exit_when_new_cell_has_no_fence() {

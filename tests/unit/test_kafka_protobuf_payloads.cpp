@@ -1,6 +1,8 @@
 #include "common/kafka/kafka_consumer.h"
 #include "common/kafka/kafka_producer.h"
-#include "common/proto/generated_conversions.h"
+#include "common/proto/geofence_payload_codec.h"
+#include "common/proto/location_payload_codec.h"
+#include "common/proto/matching_payload_codec.h"
 
 #include <cassert>
 #include <iostream>
@@ -27,18 +29,13 @@ void test_location_event_payload_round_trip_through_kafka_fallback() {
     event.seq = 42;
     event.metadata["source"] = "protobuf";
 
-    const auto generated = signalroute::proto_boundary::to_generated_location_event(event);
-    std::string payload;
-    assert(generated.SerializeToString(&payload));
-
-    producer.produce(topic, event.device_id, payload);
+    producer.produce(topic, event.device_id, signalroute::proto_boundary::encode_location_payload(event));
     auto message = consumer.poll(0);
     assert(message.has_value());
     assert(message->key == "dev-1");
+    assert(message->payload.rfind(signalroute::proto_boundary::protobuf_location_payload_prefix(), 0) == 0);
 
-    signalroute::v1::LocationEvent parsed_payload;
-    assert(parsed_payload.ParseFromString(message->payload));
-    const auto parsed = signalroute::proto_boundary::location_event_from_generated(parsed_payload);
+    const auto parsed = signalroute::proto_boundary::decode_location_payload(message->payload);
     assert(parsed.is_ok());
     assert(parsed.value().device_id == event.device_id);
     assert(parsed.value().metadata.at("source") == "protobuf");
@@ -59,17 +56,12 @@ void test_geofence_event_payload_round_trip_through_kafka_fallback() {
     event.event_ts_ms = 3000;
     event.inside_duration_s = 600;
 
-    const auto generated = signalroute::proto_boundary::to_generated_geofence_event(event);
-    std::string payload;
-    assert(generated.SerializeToString(&payload));
-
-    producer.produce(topic, event.device_id, payload);
+    producer.produce(topic, event.device_id, signalroute::proto_boundary::encode_geofence_event_payload(event));
     auto message = consumer.poll(0);
     assert(message.has_value());
+    assert(message->payload.rfind(signalroute::proto_boundary::protobuf_geofence_event_payload_prefix(), 0) == 0);
 
-    signalroute::v1::GeofenceEvent parsed_payload;
-    assert(parsed_payload.ParseFromString(message->payload));
-    const auto parsed = signalroute::proto_boundary::geofence_event_from_generated(parsed_payload);
+    const auto parsed = signalroute::proto_boundary::decode_geofence_event_payload(message->payload);
     assert(parsed.is_ok());
     assert(parsed.value().event_type == signalroute::GeofenceEventType::DWELL);
     assert(parsed.value().inside_duration_s == 600);
@@ -91,16 +83,12 @@ void test_matching_payloads_round_trip_through_kafka_fallback() {
     request.max_agents = 2;
     request.strategy = "nearest";
 
-    auto generated_request = signalroute::proto_boundary::to_generated_match_request(request);
-    std::string request_payload;
-    assert(generated_request.SerializeToString(&request_payload));
-    producer.produce(request_topic, request.request_id, request_payload);
+    producer.produce(request_topic, request.request_id, signalroute::proto_boundary::encode_match_request_payload(request));
 
     auto request_message = request_consumer.poll(0);
     assert(request_message.has_value());
-    signalroute::v1::MatchRequest parsed_request_payload;
-    assert(parsed_request_payload.ParseFromString(request_message->payload));
-    const auto parsed_request = signalroute::proto_boundary::match_request_from_generated(parsed_request_payload);
+    assert(request_message->payload.rfind(signalroute::proto_boundary::protobuf_match_request_payload_prefix(), 0) == 0);
+    const auto parsed_request = signalroute::proto_boundary::decode_match_request_payload(request_message->payload);
     assert(parsed_request.is_ok());
     assert(parsed_request.value().request_id == "req-1");
     assert(parsed_request.value().max_agents == 2);
@@ -111,16 +99,13 @@ void test_matching_payloads_round_trip_through_kafka_fallback() {
     result.assigned_agent_ids = {"agent-1"};
     result.latency_ms = 25;
 
-    auto generated_result = signalroute::proto_boundary::to_generated_match_result(result, request.requester_id, request.strategy);
-    std::string result_payload;
-    assert(generated_result.SerializeToString(&result_payload));
-    producer.produce(result_topic, result.request_id, result_payload);
+    producer.produce(result_topic, result.request_id, signalroute::proto_boundary::encode_match_result_payload(
+        result, request.requester_id, request.strategy));
 
     auto result_message = result_consumer.poll(0);
     assert(result_message.has_value());
-    signalroute::v1::MatchResult parsed_result_payload;
-    assert(parsed_result_payload.ParseFromString(result_message->payload));
-    const auto parsed_result = signalroute::proto_boundary::match_result_from_generated(parsed_result_payload);
+    assert(result_message->payload.rfind(signalroute::proto_boundary::protobuf_match_result_payload_prefix(), 0) == 0);
+    const auto parsed_result = signalroute::proto_boundary::decode_match_result_payload(result_message->payload);
     assert(parsed_result.is_ok());
     assert(parsed_result.value().status == signalroute::MatchStatus::MATCHED);
     assert((parsed_result.value().assigned_agent_ids == std::vector<std::string>{"agent-1"}));

@@ -1,24 +1,13 @@
 #include "evaluator.h"
 #include "point_in_polygon.h"
 #include "../common/metrics/metrics.h"
+#include "../common/proto/geofence_payload_codec.h"
 
-#include <sstream>
 #include <unordered_map>
 #include <utility>
 
 namespace signalroute {
 namespace {
-
-std::string serialize_geofence_event(const GeofenceEventRecord& event) {
-    std::ostringstream out;
-    out << event.device_id << ','
-        << event.fence_id << ','
-        << geofence_event_type_to_string(event.event_type) << ','
-        << event.event_ts_ms << ','
-        << event.lat << ','
-        << event.lon;
-    return out.str();
-}
 
 GeofenceEventRecord make_event_record(const std::string& device_id,
                                       const GeofenceRule& fence,
@@ -80,14 +69,14 @@ void Evaluator::evaluate(const std::string& device_id,
             auto record = make_event_record(
                 device_id, *fence, GeofenceEventType::ENTER, lat, lon, timestamp_ms);
             pg_.insert_geofence_event(record);
-            event_producer_.produce(event_topic_, device_id, serialize_geofence_event(record));
+            event_producer_.produce(event_topic_, device_id, proto_boundary::encode_geofence_event_payload(record));
             Metrics::instance().inc_geofence_event("ENTER");
         } else if (!inside && (previous == FenceState::INSIDE || previous == FenceState::DWELL)) {
             redis_.set_fence_state(device_id, fence->fence_id, FenceState::OUTSIDE, timestamp_ms);
             auto record = make_event_record(
                 device_id, *fence, GeofenceEventType::EXIT, lat, lon, timestamp_ms);
             pg_.insert_geofence_event(record);
-            event_producer_.produce(event_topic_, device_id, serialize_geofence_event(record));
+            event_producer_.produce(event_topic_, device_id, proto_boundary::encode_geofence_event_payload(record));
             Metrics::instance().inc_geofence_event("EXIT");
         }
     }

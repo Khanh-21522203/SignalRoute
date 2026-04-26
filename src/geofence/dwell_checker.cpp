@@ -1,23 +1,13 @@
 #include "dwell_checker.h"
+#include "../common/proto/geofence_payload_codec.h"
 #include "../common/types/geofence_types.h"
 
 #include <chrono>
-#include <sstream>
 #include <thread>
 #include <utility>
 
 namespace signalroute {
 namespace {
-
-std::string serialize_dwell_event(const GeofenceEventRecord& event) {
-    std::ostringstream out;
-    out << event.device_id << ','
-        << event.fence_id << ','
-        << geofence_event_type_to_string(event.event_type) << ','
-        << event.event_ts_ms << ','
-        << event.inside_duration_s;
-    return out.str();
-}
 
 GeofenceEventRecord make_dwell_record(const FenceStateRecord& state,
                                       const GeofenceRule& fence,
@@ -72,7 +62,7 @@ int DwellChecker::check_once(int64_t now_ms) {
         redis_.set_fence_state(state.device_id, state.fence_id, FenceState::DWELL, now_ms);
         auto record = make_dwell_record(state, *fence, now_ms);
         pg_.insert_geofence_event(record);
-        producer_.produce(event_topic_, state.device_id, serialize_dwell_event(record));
+        producer_.produce(event_topic_, state.device_id, proto_boundary::encode_geofence_event_payload(record));
         ++transitioned;
     }
 

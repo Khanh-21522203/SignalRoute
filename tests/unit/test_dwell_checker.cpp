@@ -2,6 +2,7 @@
 #include "common/clients/redis_client.h"
 #include "common/kafka/kafka_consumer.h"
 #include "common/kafka/kafka_producer.h"
+#include "common/proto/geofence_payload_codec.h"
 #include "geofence/dwell_checker.h"
 #include "geofence/fence_registry.h"
 
@@ -57,6 +58,12 @@ struct Harness {
     signalroute::DwellChecker checker;
 };
 
+signalroute::GeofenceEventRecord decode_event_payload(const std::string& payload) {
+    auto decoded = signalroute::proto_boundary::decode_geofence_event_payload(payload);
+    assert(decoded.is_ok());
+    return decoded.value();
+}
+
 } // namespace
 
 void test_inside_state_transitions_to_dwell_after_threshold() {
@@ -83,7 +90,11 @@ void test_inside_state_transitions_to_dwell_after_threshold() {
     const auto msg = harness.consumer.poll(0);
     assert(msg.has_value());
     assert(msg->key == "dev-1");
-    assert(msg->payload.find("DWELL") != std::string::npos);
+    const auto published = decode_event_payload(msg->payload);
+    assert(published.device_id == "dev-1");
+    assert(published.fence_id == "fence-1");
+    assert(published.event_type == signalroute::GeofenceEventType::DWELL);
+    assert(published.inside_duration_s == 5);
 }
 
 void test_inside_state_before_threshold_does_not_transition() {

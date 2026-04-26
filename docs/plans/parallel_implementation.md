@@ -10,7 +10,7 @@ This file defines the preparation required before running multiple agents or dev
 - Durable cross-process communication remains Kafka.
 - The tracked completion roadmap is `docs/plans/finish_plan.md`.
 - Dependency strategy is tracked in `docs/plans/dependency_strategy.md`.
-- Gateway/processor/DLQ fallback payload parsing uses internal CSV only for tests. Protobuf/Kafka serialization remains a production integration task.
+- Gateway, processor, geofence, matching payload codecs, and DLQ replay use shared codecs. Protobuf payloads are emitted when `SR_ENABLE_PROTOBUF=ON`; CSV remains fallback-build scaffolding and decoder compatibility.
 - Redis, PostGIS, Kafka, H3, and metrics adapters currently have deterministic in-memory fallback behavior for unit and lifecycle tests.
 - Processor/geofence/metrics observer wiring is implemented for in-process fallback composition.
 - Domain-to-wire conversion contracts live under `src/common/proto/`; generated protobuf code should adapt through that boundary.
@@ -97,17 +97,16 @@ An agent must report:
 ### 6. Dependency Order
 Start remaining production work in this order unless deliberately coordinated:
 
-1. Geofence, matching, and DLQ protobuf runtime payload integration behind fallback-compatible switches
-2. Real Kafka producer/consumer adapters and protobuf payload serialization
+1. Real Kafka producer/consumer adapters using the existing shared protobuf payload codecs
+2. Matching production Kafka request/result loop
 3. Real H3 adapter behind the existing `H3Index` interface
 4. Real Redis adapter behind the existing state/fence/reservation contract
 5. Real PostGIS adapter behind the existing history/geofence repository contract
 6. Gateway gRPC/UDP transport over the existing validation/rate-limit/publish flow
 7. Query gRPC/HTTP transport over the existing latest/nearby/trip handlers
-8. Processor production Kafka-to-state/history loop replacing CSV fallback parsing
+8. Processor production Kafka-to-state/history loop narrowing CSV fallback parsing
 9. Geofence production registry loading, Kafka event serialization, and admin CRUD
-10. Matching production Kafka request/result loop
-11. Workers, Prometheus/admin health, retry/backoff, CI, packaging, and performance tests
+10. Workers, Prometheus/admin health, retry/backoff, CI, packaging, and performance tests
 
 ## Safe Initial Parallel Batch
 These tasks can run in parallel with low conflict risk from the current fallback baseline. They are recommended before broad production adapter work because they clarify external dependency choices and preserve existing contracts.
@@ -132,4 +131,4 @@ Do not run these at the same time without coordination:
 - CMake dependency strategy and any task adding external dependencies
 
 ## Next Recommended Implementation Task
-Add geofence, matching, and DLQ runtime protobuf payload integration behind fallback-compatible switches. Keep existing fallback payloads until protobuf runtime integration tests pass for each boundary. gRPC service stubs remain gated behind `SR_ENABLE_GRPC`.
+Add the real Kafka producer/consumer adapters behind the existing `KafkaProducer` and `KafkaConsumer` interfaces, then route location, geofence, matching, and DLQ payloads through the shared protobuf codecs. Keep CSV fallback decoding until durable Kafka integration tests pass. gRPC service stubs remain gated behind `SR_ENABLE_GRPC`.

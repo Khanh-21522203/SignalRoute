@@ -4,6 +4,7 @@
 #include "common/events/event_bus.h"
 #include "common/kafka/kafka_consumer.h"
 #include "common/kafka/kafka_producer.h"
+#include "common/proto/geofence_payload_codec.h"
 #include "geofence/evaluator.h"
 #include "geofence/fence_registry.h"
 #include "geofence/geofence_event_handlers.h"
@@ -62,6 +63,12 @@ struct Harness {
     signalroute::GeofenceEventHandlers handlers;
 };
 
+signalroute::GeofenceEventRecord decode_event_payload(const std::string& payload) {
+    auto decoded = signalroute::proto_boundary::decode_geofence_event_payload(payload);
+    assert(decoded.is_ok());
+    return decoded.value();
+}
+
 } // namespace
 
 void test_geofence_evaluation_event_invokes_evaluator() {
@@ -77,7 +84,10 @@ void test_geofence_evaluation_event_invokes_evaluator() {
     assert(harness.pg.geofence_event_count() == 1);
     const auto msg = harness.consumer.poll(0);
     assert(msg.has_value());
-    assert(msg->payload.find("ENTER") != std::string::npos);
+    const auto published = decode_event_payload(msg->payload);
+    assert(published.device_id == "dev-1");
+    assert(published.fence_id == "fence-1");
+    assert(published.event_type == signalroute::GeofenceEventType::ENTER);
 }
 
 void test_clear_unsubscribes_geofence_handler() {
