@@ -2,6 +2,10 @@ add_executable(test_haversine unit/test_haversine.cpp)
 target_link_libraries(test_haversine PRIVATE sr_common)
 add_test(NAME test_haversine COMMAND test_haversine)
 
+add_executable(test_h3_index unit/test_h3_index.cpp)
+target_link_libraries(test_h3_index PRIVATE sr_common)
+add_test(NAME test_h3_index COMMAND test_h3_index)
+
 add_executable(test_point_in_polygon unit/test_point_in_polygon.cpp)
 target_link_libraries(test_point_in_polygon PRIVATE sr_geofence)
 add_test(NAME test_point_in_polygon COMMAND test_point_in_polygon)
@@ -23,6 +27,18 @@ target_link_libraries(test_config_loader PRIVATE sr_common)
 target_compile_definitions(test_config_loader PRIVATE SIGNALROUTE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME test_config_loader COMMAND test_config_loader)
 
+add_executable(test_domain_types unit/test_domain_types.cpp)
+target_link_libraries(test_domain_types PRIVATE sr_common)
+add_test(NAME test_domain_types COMMAND test_domain_types)
+
+add_executable(test_redis_client unit/test_redis_client.cpp)
+target_link_libraries(test_redis_client PRIVATE sr_common)
+add_test(NAME test_redis_client COMMAND test_redis_client)
+
+add_executable(test_postgres_client unit/test_postgres_client.cpp)
+target_link_libraries(test_postgres_client PRIVATE sr_common)
+add_test(NAME test_postgres_client COMMAND test_postgres_client)
+
 add_executable(test_dedup_window unit/test_dedup_window.cpp)
 target_link_libraries(test_dedup_window PRIVATE sr_processor)
 add_test(NAME test_dedup_window COMMAND test_dedup_window)
@@ -34,6 +50,10 @@ add_test(NAME test_sequence_guard COMMAND test_sequence_guard)
 add_executable(test_state_writer unit/test_state_writer.cpp)
 target_link_libraries(test_state_writer PRIVATE sr_processor)
 add_test(NAME test_state_writer COMMAND test_state_writer)
+
+add_executable(test_history_writer unit/test_history_writer.cpp)
+target_link_libraries(test_history_writer PRIVATE sr_processor)
+add_test(NAME test_history_writer COMMAND test_history_writer)
 
 add_executable(test_nearby_handler unit/test_nearby_handler.cpp)
 target_link_libraries(test_nearby_handler PRIVATE sr_query sr_processor)

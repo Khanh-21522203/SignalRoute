@@ -18,6 +18,7 @@
 #include <variant>
 #include <string>
 #include <stdexcept>
+#include <utility>
 
 namespace signalroute {
 

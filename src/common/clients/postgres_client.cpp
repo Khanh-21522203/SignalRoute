@@ -1,9 +1,39 @@
 #include "postgres_client.h"
+#include "../spatial/haversine.h"
+
+#include <algorithm>
 #include <iostream>
+#include <utility>
 
 // TODO: #include <pqxx/pqxx>  // or #include <libpq-fe.h>
 
 namespace signalroute {
+namespace {
+
+int64_t event_time_ms(const LocationEvent& event) {
+    return event.timestamp_ms != 0 ? event.timestamp_ms : event.server_recv_ms;
+}
+
+bool in_time_range(const LocationEvent& event, int64_t from_ts, int64_t to_ts) {
+    const int64_t ts = event_time_ms(event);
+    return ts >= from_ts && ts <= to_ts;
+}
+
+void sort_trip_points(std::vector<LocationEvent>& events) {
+    std::sort(events.begin(), events.end(), [](const LocationEvent& lhs, const LocationEvent& rhs) {
+        const int64_t lhs_time = event_time_ms(lhs);
+        const int64_t rhs_time = event_time_ms(rhs);
+        if (lhs_time != rhs_time) {
+            return lhs_time < rhs_time;
+        }
+        if (lhs.device_id != rhs.device_id) {
+            return lhs.device_id < rhs.device_id;
+        }
+        return lhs.seq < rhs.seq;
+    });
+}
+
+} // namespace
 
 PostgresClient::PostgresClient(const PostGISConfig& config) : config_(config) {
     // TODO: Initialize connection pool
@@ -11,63 +41,109 @@ PostgresClient::PostgresClient(const PostGISConfig& config) : config_(config) {
     //   // Prepare statements for hot-path operations
     //   conn->prepare("insert_trip_point", "INSERT INTO trip_points ...");
     //   conn->prepare("query_trip", "SELECT ... FROM trip_points WHERE ...");
-    std::cerr << "[PostgresClient] WARNING: PostGIS client not yet implemented.\n";
+    std::cerr << "[PostgresClient] WARNING: using in-memory PostGIS fallback.\n";
 }
 
 PostgresClient::~PostgresClient() = default;
 
 bool PostgresClient::ping() {
-    // TODO: Execute SELECT 1 on a pooled connection
-    return false;
+    // The in-memory fallback is always reachable. The real adapter will execute
+    // SELECT 1 on a pooled connection.
+    return true;
 }
 
-void PostgresClient::batch_insert_trip_points(const std::vector<LocationEvent>& /*events*/) {
-    // TODO: Implement batch INSERT
-    //
-    //   Build multi-row INSERT:
-    //   INSERT INTO trip_points (device_id, seq, event_time, recv_time,
-    //       location, altitude_m, accuracy_m, speed_ms, heading_deg, h3_r7, metadata)
-    //   VALUES ($1, $2, to_timestamp($3/1000.0), to_timestamp($4/1000.0),
-    //       ST_Point($lon, $lat)::geography, $5, $6, $7, $8, $9, $10::jsonb),
-    //       ...
-    //   ON CONFLICT (device_id, seq) DO NOTHING;
+void PostgresClient::batch_insert_trip_points(const std::vector<LocationEvent>& events) {
+    std::lock_guard lock(mu_);
+    for (const auto& event : events) {
+        auto [_, inserted] = trip_point_keys_.emplace(event.device_id, event.seq);
+        if (inserted) {
+            trip_points_.push_back(event);
+        }
+    }
 }
 
 std::vector<LocationEvent> PostgresClient::query_trip(
-    const std::string& /*device_id*/,
-    int64_t /*from_ts*/, int64_t /*to_ts*/,
-    int /*limit*/)
+    const std::string& device_id,
+    int64_t from_ts, int64_t to_ts,
+    int limit)
 {
-    // TODO: Implement parameterized query
-    //   SELECT device_id, seq, extract(epoch from event_time)*1000 AS event_time_ms,
-    //       ST_Y(location::geometry) AS lat, ST_X(location::geometry) AS lon,
-    //       speed_ms, heading_deg
-    //   FROM trip_points
-    //   WHERE device_id = $1
-    //     AND event_time BETWEEN to_timestamp($2/1000.0) AND to_timestamp($3/1000.0)
-    //   ORDER BY event_time ASC
-    //   LIMIT $4;
-    return {};
+    if (limit <= 0 || from_ts > to_ts) {
+        return {};
+    }
+
+    std::lock_guard lock(mu_);
+    std::vector<LocationEvent> result;
+    for (const auto& event : trip_points_) {
+        if (event.device_id == device_id && in_time_range(event, from_ts, to_ts)) {
+            result.push_back(event);
+        }
+    }
+
+    sort_trip_points(result);
+    if (static_cast<int>(result.size()) > limit) {
+        result.resize(static_cast<size_t>(limit));
+    }
+    return result;
 }
 
 std::vector<LocationEvent> PostgresClient::query_trip_spatial(
-    const std::string& /*device_id*/,
-    int64_t /*from_ts*/, int64_t /*to_ts*/,
-    double /*center_lat*/, double /*center_lon*/, double /*radius_m*/,
-    int /*limit*/)
+    const std::string& device_id,
+    int64_t from_ts, int64_t to_ts,
+    double center_lat, double center_lon, double radius_m,
+    int limit)
 {
-    // TODO: Add ST_DWithin filter to the trip query
-    return {};
+    if (limit <= 0 || radius_m < 0.0 || from_ts > to_ts) {
+        return {};
+    }
+
+    std::lock_guard lock(mu_);
+    std::vector<LocationEvent> result;
+    for (const auto& event : trip_points_) {
+        if (event.device_id != device_id || !in_time_range(event, from_ts, to_ts)) {
+            continue;
+        }
+        const double distance_m = geo::haversine(center_lat, center_lon, event.lat, event.lon);
+        if (distance_m <= radius_m) {
+            result.push_back(event);
+        }
+    }
+
+    sort_trip_points(result);
+    if (static_cast<int>(result.size()) > limit) {
+        result.resize(static_cast<size_t>(limit));
+    }
+    return result;
 }
 
 std::vector<GeofenceRule> PostgresClient::load_active_fences() {
-    // TODO: Implement SELECT * FROM geofence_rules WHERE active = true
-    //   Parse geometry, h3_cells array, etc. into GeofenceRule structs
-    return {};
+    std::lock_guard lock(mu_);
+    std::vector<GeofenceRule> result;
+    for (const auto& fence : active_fences_) {
+        if (fence.active) {
+            result.push_back(fence);
+        }
+    }
+    return result;
 }
 
-void PostgresClient::insert_geofence_event(const GeofenceEventRecord& /*event*/) {
-    // TODO: Implement INSERT INTO geofence_events
+void PostgresClient::insert_geofence_event(const GeofenceEventRecord& event) {
+    std::lock_guard lock(mu_);
+    geofence_events_.push_back(event);
+}
+
+size_t PostgresClient::trip_point_count() const {
+    std::lock_guard lock(mu_);
+    return trip_points_.size();
+}
+
+size_t PostgresClient::geofence_event_count() const {
+    std::lock_guard lock(mu_);
+    return geofence_events_.size();
+}
+
+void PostgresClient::set_active_fences(std::vector<GeofenceRule> fences) {
+    std::lock_guard lock(mu_);
+    active_fences_ = std::move(fences);
 }
 
 } // namespace signalroute

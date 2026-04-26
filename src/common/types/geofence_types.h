@@ -77,4 +77,21 @@ inline FenceState fence_state_from_string(const std::string& s) {
     return FenceState::OUTSIDE; // default
 }
 
+/// Helper to convert GeofenceEventType to string for event payloads/storage.
+inline const char* geofence_event_type_to_string(GeofenceEventType type) {
+    switch (type) {
+        case GeofenceEventType::ENTER: return "ENTER";
+        case GeofenceEventType::EXIT:  return "EXIT";
+        case GeofenceEventType::DWELL: return "DWELL";
+    }
+    return "UNKNOWN";
+}
+
+/// Helper to parse GeofenceEventType from string.
+inline GeofenceEventType geofence_event_type_from_string(const std::string& s) {
+    if (s == "EXIT")  return GeofenceEventType::EXIT;
+    if (s == "DWELL") return GeofenceEventType::DWELL;
+    return GeofenceEventType::ENTER; // default
+}
+
 } // namespace signalroute

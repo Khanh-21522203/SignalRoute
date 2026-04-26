@@ -6,6 +6,13 @@
  * Winding number algorithm for determining if a point lies inside
  * a polygon (works for both convex and simple concave polygons).
  *
+ * Policy:
+ * - Open and closed rings are accepted; duplicate closing vertex is ignored.
+ * - Clockwise and counter-clockwise vertex order are equivalent.
+ * - Points on an edge or vertex are treated as inside.
+ * - Degenerate polygons (fewer than 3 effective vertices or zero area)
+ *   never contain points.
+ *
  * For complex polygons with holes, fall back to PostGIS ST_Contains.
  */
 
@@ -21,7 +28,7 @@ namespace signalroute::geo {
  * @param lon Point longitude
  * @param vertices Polygon vertices as (lat, lon) pairs.
  *                 Must be a closed ring (first == last) or will be auto-closed.
- * @return true if point is inside the polygon
+ * @return true if point is inside the polygon or on its boundary
  *
  * Time complexity: O(n) where n = number of vertices
  * Thread-safe: pure function

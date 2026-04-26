@@ -1,7 +1,25 @@
 #include "history_writer.h"
 #include "../common/metrics/metrics.h"
 
+#include <chrono>
+#include <exception>
+#include <sstream>
+
 namespace signalroute {
+namespace {
+
+std::string serialize_dlq_payload(const LocationEvent& event) {
+    std::ostringstream out;
+    out << event.device_id << ','
+        << event.seq << ','
+        << event.timestamp_ms << ','
+        << event.server_recv_ms << ','
+        << event.lat << ','
+        << event.lon;
+    return out.str();
+}
+
+} // namespace
 
 HistoryWriter::HistoryWriter(PostgresClient& pg, KafkaProducer& dlq, const ProcessorConfig& cfg)
     : pg_(pg), dlq_(dlq), config_(cfg) {
@@ -23,18 +41,19 @@ void HistoryWriter::flush() {
         buffer_.reserve(config_.history_batch_size);
     }
 
-    // TODO: Implement batch insert with DLQ fallback
-    //
-    //   try {
-    //       pg_.batch_insert_trip_points(batch);
-    //   } catch (const std::exception& e) {
-    //       Metrics::instance().inc_postgis_write_errors();
-    //       // Send to DLQ for later replay
-    //       for (const auto& event : batch) {
-    //           std::string payload = /* serialize event */;
-    //           dlq_.produce(config_.dlq_topic, event.device_id, payload);
-    //       }
-    //   }
+    const auto start = std::chrono::steady_clock::now();
+    try {
+        pg_.batch_insert_trip_points(batch);
+        const auto elapsed = std::chrono::steady_clock::now() - start;
+        Metrics::instance().observe_postgis_write_latency(
+            std::chrono::duration<double, std::milli>(elapsed).count());
+        Metrics::instance().set_history_buffer_size(0);
+    } catch (const std::exception&) {
+        Metrics::instance().inc_postgis_write_errors();
+        for (const auto& event : batch) {
+            dlq_.produce("tm.location.dlq", event.device_id, serialize_dlq_payload(event));
+        }
+    }
 }
 
 size_t HistoryWriter::buffer_size() const {

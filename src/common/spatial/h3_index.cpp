@@ -3,6 +3,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <algorithm>
+#include <string>
 
 // TODO: #include <h3/h3api.h>  // H3 C API
 
@@ -42,7 +43,9 @@ H3Index::H3Index(int resolution)
 }
 
 int64_t H3Index::lat_lng_to_cell(double lat, double lon) const {
-    if (lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0) {
+    if (!std::isfinite(lat) || !std::isfinite(lon)
+        || lat < -90.0 || lat > 90.0
+        || lon < -180.0 || lon > 180.0) {
         throw std::invalid_argument("coordinate out of range");
     }
 
@@ -73,6 +76,10 @@ std::vector<int64_t> H3Index::grid_disk(int64_t center_cell, int k) const {
 }
 
 int H3Index::radius_to_k(double radius_m) const {
+    if (!std::isfinite(radius_m) || radius_m < 0.0) {
+        throw std::invalid_argument("radius must be finite and non-negative");
+    }
+
     double edge = avg_edge_length_m();
     if (edge <= 0) return 1;
     return static_cast<int>(std::ceil(radius_m / edge));

@@ -19,6 +19,9 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <mutex>
+#include <set>
+#include <utility>
 
 namespace signalroute {
 
@@ -87,8 +90,20 @@ public:
      */
     void insert_geofence_event(const GeofenceEventRecord& event);
 
+    // In-memory fallback inspection/seeding helpers. These keep unit tests and
+    // higher-level service slices deterministic until the real PostGIS adapter
+    // is wired in.
+    size_t trip_point_count() const;
+    size_t geofence_event_count() const;
+    void set_active_fences(std::vector<GeofenceRule> fences);
+
 private:
     PostGISConfig config_;
+    mutable std::mutex mu_;
+    std::vector<LocationEvent> trip_points_;
+    std::vector<GeofenceRule> active_fences_;
+    std::vector<GeofenceEventRecord> geofence_events_;
+    std::set<std::pair<std::string, uint64_t>> trip_point_keys_;
 
     // TODO: Add connection pool
     // std::unique_ptr<pqxx::connection_pool> pool_;
