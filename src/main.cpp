@@ -1,4 +1,5 @@
 #include "common/config/config.h"
+#include "common/events/event_bus.h"
 #include "common/metrics/metrics.h"
 #include "gateway/gateway_service.h"
 #include "processor/processor_service.h"
@@ -65,27 +66,33 @@ int main(int argc, char** argv) {
     signalroute::QueryService query;
     signalroute::GeofenceEngine geofence;
     signalroute::MatchingService matching;
+    signalroute::EventBus event_bus;
 
     try {
         const auto& role = config.server.role;
+        const auto wants_gateway = role == "standalone" || role == "gateway";
+        const auto wants_processor = role == "standalone" || role == "processor";
+        const auto wants_query = role == "standalone" || role == "query";
+        const auto wants_geofence = role == "standalone" || role == "geofence";
+        const auto wants_matching = role == "standalone" || role == "matcher" || role == "matching";
 
-        if (role == "standalone" || role == "processor") {
-            processor.start(config);
+        if (wants_processor) {
+            processor.start(config, event_bus);
         }
 
-        if (role == "standalone" || role == "query") {
+        if (wants_query) {
             query.start(config);
         }
 
-        if ((role == "standalone" || role == "geofence") && config.geofence.eval_enabled) {
-            geofence.start(config);
+        if (wants_geofence && config.geofence.eval_enabled) {
+            geofence.start(config, event_bus);
         }
 
-        if (role == "standalone" || role == "matcher") {
+        if (wants_matching) {
             matching.start(config);
         }
 
-        if (role == "standalone" || role == "gateway") {
+        if (wants_gateway) {
             gateway.start(config);
         }
 
@@ -94,12 +101,24 @@ int main(int argc, char** argv) {
         // Wait for stop signal
         while (!g_stop_flag.load()) {
             // Check health
-            if ((role == "standalone" || role == "gateway") && !gateway.is_healthy()) {
+            if (wants_gateway && !gateway.is_healthy()) {
                 std::cerr << "[SignalRoute] Gateway unhealthy! Initiating shutdown.\n";
                 break;
             }
-            if ((role == "standalone" || role == "processor") && !processor.is_healthy()) {
+            if (wants_processor && !processor.is_healthy()) {
                 std::cerr << "[SignalRoute] Processor unhealthy! Initiating shutdown.\n";
+                break;
+            }
+            if (wants_query && !query.is_healthy()) {
+                std::cerr << "[SignalRoute] Query service unhealthy! Initiating shutdown.\n";
+                break;
+            }
+            if (wants_geofence && config.geofence.eval_enabled && !geofence.is_healthy()) {
+                std::cerr << "[SignalRoute] Geofence engine unhealthy! Initiating shutdown.\n";
+                break;
+            }
+            if (wants_matching && !matching.is_healthy()) {
+                std::cerr << "[SignalRoute] Matching service unhealthy! Initiating shutdown.\n";
                 break;
             }
             std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -108,11 +127,11 @@ int main(int argc, char** argv) {
         std::cout << "[SignalRoute] Shutting down...\n";
 
         // Stop in reverse order
-        if (role == "standalone" || role == "gateway") gateway.stop();
-        if (role == "standalone" || role == "matcher") matching.stop();
-        if ((role == "standalone" || role == "geofence") && config.geofence.eval_enabled) geofence.stop();
-        if (role == "standalone" || role == "query") query.stop();
-        if (role == "standalone" || role == "processor") processor.stop();
+        if (wants_gateway) gateway.stop();
+        if (wants_matching) matching.stop();
+        if (wants_geofence && config.geofence.eval_enabled) geofence.stop();
+        if (wants_query) query.stop();
+        if (wants_processor) processor.stop();
 
         std::cout << "[SignalRoute] Shutdown complete.\n";
 
