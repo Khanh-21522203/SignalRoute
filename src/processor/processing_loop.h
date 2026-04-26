@@ -19,6 +19,7 @@ class DedupWindow;
 class SequenceGuard;
 class StateWriter;
 class HistoryWriter;
+class EventBus;
 
 class ProcessingLoop {
 public:
@@ -29,6 +30,16 @@ public:
         StateWriter& state_writer,
         HistoryWriter& history_writer,
         const ProcessorConfig& config
+    );
+
+    ProcessingLoop(
+        KafkaConsumer& consumer,
+        DedupWindow& dedup,
+        SequenceGuard& seq_guard,
+        StateWriter& state_writer,
+        HistoryWriter& history_writer,
+        const ProcessorConfig& config,
+        EventBus& event_bus
     );
 
     /**
@@ -55,6 +66,7 @@ private:
     StateWriter& state_writer_;
     HistoryWriter& history_writer_;
     ProcessorConfig config_;
+    EventBus* event_bus_ = nullptr;
 };
 
 } // namespace signalroute

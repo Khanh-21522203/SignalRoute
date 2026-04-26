@@ -5,6 +5,7 @@ add_library(sr_geofence STATIC
     evaluator.cpp
     point_in_polygon.cpp
     dwell_checker.cpp
+    geofence_event_handlers.cpp
 )
 target_include_directories(sr_geofence PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(sr_geofence PUBLIC sr_common)

@@ -9,9 +9,16 @@
 
 #include "../common/clients/redis_client.h"
 #include "../common/spatial/h3_index.h"
+#include "../common/types/device_state.h"
 #include "../common/types/location_event.h"
 
 namespace signalroute {
+
+struct StateWriteOutcome {
+    bool accepted = false;
+    DeviceState state;
+    int64_t previous_h3_cell = 0;
+};
 
 class StateWriter {
 public:
@@ -33,6 +40,11 @@ public:
      * TODO: Implement
      */
     bool write(const LocationEvent& event);
+
+    /**
+     * Write state and return enough context for downstream in-process events.
+     */
+    StateWriteOutcome write_with_result(const LocationEvent& event);
 
 private:
     RedisClient& redis_;

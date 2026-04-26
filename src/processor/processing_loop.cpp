@@ -1,5 +1,7 @@
 #include "processing_loop.h"
 #include "../common/kafka/kafka_consumer.h"
+#include "../common/events/all_events.h"
+#include "../common/events/event_bus.h"
 #include "dedup_window.h"
 #include "sequence_guard.h"
 #include "state_writer.h"
@@ -65,6 +67,20 @@ ProcessingLoop::ProcessingLoop(
     , config_(config)
 {}
 
+ProcessingLoop::ProcessingLoop(
+    KafkaConsumer& consumer,
+    DedupWindow& dedup,
+    SequenceGuard& seq_guard,
+    StateWriter& state_writer,
+    HistoryWriter& history_writer,
+    const ProcessorConfig& config,
+    EventBus& event_bus
+)
+    : ProcessingLoop(consumer, dedup, seq_guard, state_writer, history_writer, config)
+{
+    event_bus_ = &event_bus;
+}
+
 void ProcessingLoop::run(std::atomic<bool>& should_stop) {
     auto last_flush = std::chrono::steady_clock::now();
 
@@ -88,14 +104,30 @@ void ProcessingLoop::run(std::atomic<bool>& should_stop) {
         }
 
         if (dedup_.is_duplicate(event->device_id, event->seq)) {
-            Metrics::instance().inc_dedup_hit();
+            if (event_bus_) {
+                event_bus_->publish(events::LocationDuplicateRejected{*event});
+            } else {
+                Metrics::instance().inc_dedup_hit();
+            }
             consumer_.commit(*msg);
             continue;
         }
         dedup_.mark_seen(event->device_id, event->seq);
 
         if (!seq_guard_.should_accept(event->device_id, event->seq)) {
-            Metrics::instance().inc_seq_guard_reject();
+            if (event_bus_) {
+                event_bus_->publish(events::LocationStaleRejected{
+                    *event,
+                    seq_guard_.current_seq(event->device_id)});
+            } else {
+                Metrics::instance().inc_seq_guard_reject();
+            }
+            consumer_.commit(*msg);
+            continue;
+        }
+
+        if (event_bus_) {
+            event_bus_->publish(events::LocationAccepted{*event});
             consumer_.commit(*msg);
             continue;
         }

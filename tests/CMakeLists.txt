@@ -63,6 +63,18 @@ add_executable(test_processing_loop unit/test_processing_loop.cpp)
 target_link_libraries(test_processing_loop PRIVATE sr_processor)
 add_test(NAME test_processing_loop COMMAND test_processing_loop)
 
+add_executable(test_processor_event_handlers unit/test_processor_event_handlers.cpp)
+target_link_libraries(test_processor_event_handlers PRIVATE sr_common sr_processor)
+add_test(NAME test_processor_event_handlers COMMAND test_processor_event_handlers)
+
+add_executable(test_geofence_event_handlers unit/test_geofence_event_handlers.cpp)
+target_link_libraries(test_geofence_event_handlers PRIVATE sr_geofence)
+add_test(NAME test_geofence_event_handlers COMMAND test_geofence_event_handlers)
+
+add_executable(test_processing_event_pipeline unit/test_processing_event_pipeline.cpp)
+target_link_libraries(test_processing_event_pipeline PRIVATE sr_common sr_processor sr_geofence)
+add_test(NAME test_processing_event_pipeline COMMAND test_processing_event_pipeline)
+
 add_executable(test_latest_handler unit/test_latest_handler.cpp)
 target_link_libraries(test_latest_handler PRIVATE sr_query)
 add_test(NAME test_latest_handler COMMAND test_latest_handler)

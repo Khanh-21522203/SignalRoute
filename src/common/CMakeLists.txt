@@ -11,6 +11,7 @@ add_library(sr_common STATIC
     kafka/kafka_producer.cpp
     kafka/kafka_consumer.cpp
     composition/composition_root.cpp
+    composition/metrics_event_handlers.cpp
 )
 
 target_include_directories(sr_common PUBLIC

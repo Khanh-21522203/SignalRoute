@@ -35,6 +35,11 @@ public:
      */
     bool should_accept(const std::string& device_id, uint64_t seq);
 
+    /**
+     * Return the currently stored sequence for diagnostics/events.
+     */
+    uint64_t current_seq(const std::string& device_id) const;
+
 private:
     RedisClient& redis_;
     // TODO: Add local last_seq cache (per-partition, no sync needed)

@@ -1,5 +1,4 @@
 #include "state_writer.h"
-#include "../common/types/device_state.h"
 #include <chrono>
 
 namespace signalroute {
@@ -8,6 +7,16 @@ StateWriter::StateWriter(RedisClient& redis, H3Index& h3, int device_ttl_s)
     : redis_(redis), h3_(h3), device_ttl_s_(device_ttl_s) {}
 
 bool StateWriter::write(const LocationEvent& event) {
+    return write_with_result(event).accepted;
+}
+
+StateWriteOutcome StateWriter::write_with_result(const LocationEvent& event) {
+    StateWriteOutcome outcome;
+    const auto previous = redis_.get_device_state(event.device_id);
+    if (previous) {
+        outcome.previous_h3_cell = previous->h3_cell;
+    }
+
     DeviceState state;
     state.device_id = event.device_id;
     state.lat = event.lat;
@@ -24,7 +33,9 @@ bool StateWriter::write(const LocationEvent& event) {
         state.updated_at = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
     }
 
-    return redis_.update_device_state_cas(event.device_id, state, device_ttl_s_);
+    outcome.state = state;
+    outcome.accepted = redis_.update_device_state_cas(event.device_id, state, device_ttl_s_);
+    return outcome;
 }
 
 } // namespace signalroute
