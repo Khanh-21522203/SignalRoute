@@ -7,13 +7,13 @@
  * Provides reservation, search expansion, and time management.
  */
 
+#include "matching_types.h"
+
 #include <string>
 #include <vector>
 #include <cstdint>
 
 namespace signalroute {
-
-struct MatchCandidate; // forward
 
 class MatchContext {
 public:

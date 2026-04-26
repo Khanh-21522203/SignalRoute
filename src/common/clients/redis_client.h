@@ -126,6 +126,18 @@ public:
     std::optional<FenceState> get_fence_state(const std::string& device_id,
                                               const std::string& fence_id);
 
+    /**
+     * Get full fence state metadata for a (device, fence) pair.
+     */
+    std::optional<FenceStateRecord> get_fence_state_record(const std::string& device_id,
+                                                           const std::string& fence_id);
+
+    /**
+     * List all stored fence states that match the requested state.
+     * Used by dwell checking fallback until Redis scanning is implemented.
+     */
+    std::vector<FenceStateRecord> list_fence_states(FenceState state);
+
     // ── Agent Reservation (Matching) ──
 
     /**
@@ -149,14 +161,30 @@ public:
     void release_agent(const std::string& agent_id,
                        const std::string& request_id);
 
+    /**
+     * Check whether an agent has a non-expired reservation.
+     * Fallback helper for matching tests; production Redis uses key existence.
+     */
+    bool is_agent_reserved(const std::string& agent_id) const;
+
+    /**
+     * Return the request currently holding a non-expired reservation.
+     */
+    std::optional<std::string> get_agent_reservation_holder(const std::string& agent_id) const;
+
 private:
+    struct ReservationRecord {
+        std::string request_id;
+        int64_t expires_at_ms = 0;
+    };
+
     RedisConfig config_;
 
-    std::mutex mu_;
+    mutable std::mutex mu_;
     std::unordered_map<std::string, DeviceState> device_states_;
     std::unordered_map<int64_t, std::unordered_set<std::string>> cell_devices_;
-    std::unordered_map<std::string, FenceState> fence_states_;
-    std::unordered_map<std::string, std::string> reservations_;
+    std::unordered_map<std::string, FenceStateRecord> fence_states_;
+    std::unordered_map<std::string, ReservationRecord> reservations_;
 
     // TODO: Add redis-plus-plus connection pool
     // sw::redis::ConnectionPool pool_;

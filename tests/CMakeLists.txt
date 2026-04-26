@@ -79,6 +79,26 @@ add_executable(test_geofence_evaluator unit/test_geofence_evaluator.cpp)
 target_link_libraries(test_geofence_evaluator PRIVATE sr_geofence)
 add_test(NAME test_geofence_evaluator COMMAND test_geofence_evaluator)
 
+add_executable(test_dwell_checker unit/test_dwell_checker.cpp)
+target_link_libraries(test_dwell_checker PRIVATE sr_geofence)
+add_test(NAME test_dwell_checker COMMAND test_dwell_checker)
+
+add_executable(test_strategy_registry unit/test_strategy_registry.cpp)
+target_link_libraries(test_strategy_registry PRIVATE sr_matching)
+add_test(NAME test_strategy_registry COMMAND test_strategy_registry)
+
+add_executable(test_reservation_manager unit/test_reservation_manager.cpp)
+target_link_libraries(test_reservation_manager PRIVATE sr_matching)
+add_test(NAME test_reservation_manager COMMAND test_reservation_manager)
+
+add_executable(test_nearest_strategy unit/test_nearest_strategy.cpp)
+target_link_libraries(test_nearest_strategy PRIVATE sr_matching)
+add_test(NAME test_nearest_strategy COMMAND test_nearest_strategy)
+
+add_executable(test_matching_service unit/test_matching_service.cpp)
+target_link_libraries(test_matching_service PRIVATE sr_matching)
+add_test(NAME test_matching_service COMMAND test_matching_service)
+
 add_executable(test_location_state_query unit/test_location_state_query.cpp)
 target_link_libraries(test_location_state_query PRIVATE sr_common sr_processor sr_query)
 add_test(NAME test_location_state_query COMMAND test_location_state_query)

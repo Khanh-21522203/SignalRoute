@@ -8,6 +8,7 @@
  */
 
 #include "../common/clients/redis_client.h"
+#include "../common/clients/postgres_client.h"
 #include "../common/kafka/kafka_producer.h"
 #include "../common/config/config.h"
 #include "fence_registry.h"
@@ -18,7 +19,15 @@ namespace signalroute {
 class DwellChecker {
 public:
     DwellChecker(RedisClient& redis, KafkaProducer& producer,
-                 FenceRegistry& registry, const GeofenceConfig& config);
+                 PostgresClient& pg, FenceRegistry& registry,
+                 const GeofenceConfig& config,
+                 std::string event_topic = "tm.geofence.events");
+
+    /**
+     * Execute one deterministic dwell scan.
+     * @return number of devices transitioned to DWELL.
+     */
+    int check_once(int64_t now_ms);
 
     /**
      * Run the dwell check loop. Blocks until should_stop is set.
@@ -34,8 +43,10 @@ public:
 private:
     RedisClient& redis_;
     KafkaProducer& producer_;
+    PostgresClient& pg_;
     FenceRegistry& registry_;
     GeofenceConfig config_;
+    std::string event_topic_;
 };
 
 } // namespace signalroute

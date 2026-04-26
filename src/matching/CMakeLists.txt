@@ -1,6 +1,7 @@
 # Matching server framework
 add_library(sr_matching STATIC
     matching_service.cpp
+    nearest_strategy.cpp
     strategy_registry.cpp
     reservation_manager.cpp
 )

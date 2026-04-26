@@ -3,10 +3,24 @@
 #include <iostream>
 #include <unordered_set>
 #include <utility>
+#include <chrono>
 
 // TODO: #include <sw/redis++/redis++.h>
 
 namespace signalroute {
+
+namespace {
+
+int64_t monotonic_now_ms() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+bool reservation_expired_at(int64_t expires_at_ms, int64_t now_ms) {
+    return expires_at_ms <= now_ms;
+}
+
+} // namespace
 
 RedisClient::RedisClient(const RedisConfig& config) : config_(config) {
     // TODO: Initialize connection pool
@@ -155,9 +169,28 @@ std::vector<std::string> RedisClient::get_devices_in_cells(const std::vector<int
 
 void RedisClient::set_fence_state(const std::string& device_id,
                                    const std::string& fence_id,
-                                   FenceState state, int64_t /*timestamp_ms*/) {
+                                   FenceState state, int64_t timestamp_ms) {
     std::lock_guard lock(mu_);
-    fence_states_[device_id + ":" + fence_id] = state;
+    const auto key = device_id + ":" + fence_id;
+    auto previous = fence_states_.find(key);
+
+    FenceStateRecord record;
+    record.device_id = device_id;
+    record.fence_id = fence_id;
+    record.state = state;
+    record.updated_at_ms = timestamp_ms;
+
+    if (state == FenceState::INSIDE) {
+        record.entered_at_ms = timestamp_ms;
+    } else if (state == FenceState::DWELL) {
+        if (previous != fence_states_.end() && previous->second.entered_at_ms > 0) {
+            record.entered_at_ms = previous->second.entered_at_ms;
+        } else {
+            record.entered_at_ms = timestamp_ms;
+        }
+    }
+
+    fence_states_[key] = record;
 }
 
 std::optional<FenceState> RedisClient::get_fence_state(const std::string& device_id,
@@ -167,23 +200,81 @@ std::optional<FenceState> RedisClient::get_fence_state(const std::string& device
     if (it == fence_states_.end()) {
         return std::nullopt;
     }
+    return it->second.state;
+}
+
+std::optional<FenceStateRecord> RedisClient::get_fence_state_record(
+    const std::string& device_id,
+    const std::string& fence_id) {
+    std::lock_guard lock(mu_);
+    auto it = fence_states_.find(device_id + ":" + fence_id);
+    if (it == fence_states_.end()) {
+        return std::nullopt;
+    }
     return it->second;
 }
 
-bool RedisClient::try_reserve_agent(const std::string& agent_id,
-                                     const std::string& request_id, int /*ttl_ms*/) {
+std::vector<FenceStateRecord> RedisClient::list_fence_states(FenceState state) {
     std::lock_guard lock(mu_);
-    auto [_, inserted] = reservations_.emplace(agent_id, request_id);
-    return inserted;
+    std::vector<FenceStateRecord> records;
+    for (const auto& [_, record] : fence_states_) {
+        if (record.state == state) {
+            records.push_back(record);
+        }
+    }
+    return records;
+}
+
+bool RedisClient::try_reserve_agent(const std::string& agent_id,
+                                     const std::string& request_id, int ttl_ms) {
+    if (agent_id.empty() || request_id.empty() || ttl_ms <= 0) {
+        return false;
+    }
+
+    std::lock_guard lock(mu_);
+    const int64_t now_ms = monotonic_now_ms();
+    auto it = reservations_.find(agent_id);
+    if (it != reservations_.end()) {
+        if (!reservation_expired_at(it->second.expires_at_ms, now_ms)) {
+            return false;
+        }
+        reservations_.erase(it);
+    }
+
+    reservations_.emplace(agent_id, ReservationRecord{
+        request_id,
+        now_ms + static_cast<int64_t>(ttl_ms)
+    });
+    return true;
 }
 
 void RedisClient::release_agent(const std::string& agent_id,
                                  const std::string& request_id) {
     std::lock_guard lock(mu_);
     auto it = reservations_.find(agent_id);
-    if (it != reservations_.end() && it->second == request_id) {
+    if (it != reservations_.end() && it->second.request_id == request_id) {
         reservations_.erase(it);
     }
+}
+
+bool RedisClient::is_agent_reserved(const std::string& agent_id) const {
+    std::lock_guard lock(mu_);
+    auto it = reservations_.find(agent_id);
+    if (it == reservations_.end()) {
+        return false;
+    }
+    return !reservation_expired_at(it->second.expires_at_ms, monotonic_now_ms());
+}
+
+std::optional<std::string> RedisClient::get_agent_reservation_holder(
+    const std::string& agent_id) const {
+    std::lock_guard lock(mu_);
+    auto it = reservations_.find(agent_id);
+    if (it == reservations_.end() ||
+        reservation_expired_at(it->second.expires_at_ms, monotonic_now_ms())) {
+        return std::nullopt;
+    }
+    return it->second.request_id;
 }
 
 } // namespace signalroute

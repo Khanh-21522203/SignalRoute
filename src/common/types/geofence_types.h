@@ -29,6 +29,19 @@ enum class GeofenceEventType {
 };
 
 /**
+ * Stored state for one device/fence pair.
+ * `entered_at_ms` is retained across INSIDE -> DWELL so dwell duration can be
+ * computed without a separate history lookup.
+ */
+struct FenceStateRecord {
+    std::string device_id;
+    std::string fence_id;
+    FenceState  state = FenceState::OUTSIDE;
+    int64_t     entered_at_ms = 0;
+    int64_t     updated_at_ms = 0;
+};
+
+/**
  * A registered geofence rule.
  * Loaded from PostGIS at startup and cached in FenceRegistry.
  */

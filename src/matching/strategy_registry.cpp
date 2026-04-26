@@ -1,4 +1,5 @@
 #include "strategy_registry.h"
+#include <algorithm>
 #include <stdexcept>
 
 namespace signalroute {
@@ -9,6 +10,12 @@ StrategyRegistry& StrategyRegistry::instance() {
 }
 
 void StrategyRegistry::register_strategy(const std::string& name, Factory factory) {
+    if (name.empty()) {
+        throw std::invalid_argument("matching strategy name must not be empty");
+    }
+    if (!factory) {
+        throw std::invalid_argument("matching strategy factory must not be empty");
+    }
     factories_[name] = std::move(factory);
 }
 
@@ -17,7 +24,11 @@ std::unique_ptr<IMatchStrategy> StrategyRegistry::create(const std::string& name
     if (it == factories_.end()) {
         throw std::runtime_error("Unknown matching strategy: " + name);
     }
-    return it->second();
+    auto strategy = it->second();
+    if (!strategy) {
+        throw std::runtime_error("Matching strategy factory returned null: " + name);
+    }
+    return strategy;
 }
 
 bool StrategyRegistry::has(const std::string& name) const {
@@ -30,6 +41,7 @@ std::vector<std::string> StrategyRegistry::registered_names() const {
     for (const auto& [name, _] : factories_) {
         names.push_back(name);
     }
+    std::sort(names.begin(), names.end());
     return names;
 }
 

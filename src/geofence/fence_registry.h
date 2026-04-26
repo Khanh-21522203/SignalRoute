@@ -19,6 +19,7 @@
 #include <unordered_map>
 #include <vector>
 #include <cstdint>
+#include <optional>
 
 namespace signalroute {
 
@@ -45,6 +46,9 @@ public:
 
     /// Total number of loaded fences.
     size_t fence_count() const;
+
+    /// Get one fence by id. Returns a copy to keep reload safety simple.
+    std::optional<GeofenceRule> get_fence(const std::string& fence_id) const;
 
 private:
     mutable std::shared_mutex mu_;

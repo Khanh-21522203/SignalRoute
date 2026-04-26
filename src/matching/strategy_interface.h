@@ -15,15 +15,15 @@
  *   - "batch": Batch optimization over a request window
  */
 
+#include "matching_types.h"
+
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
 namespace signalroute {
 
-// Forward declarations — defined in proto-generated code
-struct MatchRequest;      // from matching.proto
-struct MatchCandidate;    // from matching.proto
+// Forward declarations. Protobuf conversion belongs at the transport boundary.
 class MatchContext;       // framework services
 class Config;
 

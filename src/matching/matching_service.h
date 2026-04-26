@@ -13,9 +13,17 @@
  */
 
 #include "../common/config/config.h"
+#include "matching_types.h"
+
 #include <atomic>
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace signalroute {
+
+class IMatchStrategy;
+class MatchContext;
 
 class MatchingService {
 public:
@@ -25,9 +33,16 @@ public:
     void start(const Config& config);
     void stop();
     bool is_healthy() const;
+    const std::string& strategy_name() const;
+
+    MatchResult match_once(const MatchRequest& request,
+                           const std::vector<MatchCandidate>& candidates,
+                           MatchContext& context);
 
 private:
     std::atomic<bool> running_{false};
+    std::unique_ptr<IMatchStrategy> strategy_;
+    std::string strategy_name_;
 };
 
 } // namespace signalroute

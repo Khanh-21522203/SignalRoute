@@ -99,8 +99,21 @@ void test_fence_state_set_get() {
     assert(!redis.get_fence_state("dev-1", "fence-1").has_value());
     redis.set_fence_state("dev-1", "fence-1", signalroute::FenceState::INSIDE, 1234);
     assert(redis.get_fence_state("dev-1", "fence-1") == signalroute::FenceState::INSIDE);
+    auto record = redis.get_fence_state_record("dev-1", "fence-1");
+    assert(record.has_value());
+    assert(record->entered_at_ms == 1234);
+    assert(record->updated_at_ms == 1234);
+
     redis.set_fence_state("dev-1", "fence-1", signalroute::FenceState::DWELL, 2345);
     assert(redis.get_fence_state("dev-1", "fence-1") == signalroute::FenceState::DWELL);
+    record = redis.get_fence_state_record("dev-1", "fence-1");
+    assert(record.has_value());
+    assert(record->entered_at_ms == 1234);
+    assert(record->updated_at_ms == 2345);
+
+    const auto dwell_states = redis.list_fence_states(signalroute::FenceState::DWELL);
+    assert(dwell_states.size() == 1);
+    assert(dwell_states.front().device_id == "dev-1");
 }
 
 void test_agent_reservation_release_requires_matching_request_id() {

@@ -40,6 +40,15 @@ size_t FenceRegistry::fence_count() const {
     return fences_.size();
 }
 
+std::optional<GeofenceRule> FenceRegistry::get_fence(const std::string& fence_id) const {
+    std::shared_lock lock(mu_);
+    auto it = fences_.find(fence_id);
+    if (it == fences_.end()) {
+        return std::nullopt;
+    }
+    return it->second;
+}
+
 void FenceRegistry::rebuild_index() {
     cell_to_fences_.clear();
     for (const auto& [fence_id, rule] : fences_) {
