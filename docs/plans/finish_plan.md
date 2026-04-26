@@ -1,7 +1,7 @@
 # SignalRoute Completion Plan
 
 ## Purpose
-This plan turns the current skeleton into a finished backend system. It is organized by delivery milestones and feature areas. Tests must be organized by function, feature, behavior, or subsystem, not by milestone name.
+This plan turns the current fallback runtime into a finished backend system. It is organized by delivery milestones and feature areas. Tests must be organized by function, feature, behavior, or subsystem, not by milestone name.
 
 ## Current Baseline
 
@@ -12,16 +12,26 @@ This plan turns the current skeleton into a finished backend system. It is organ
 - Database migrations for trip history, H3 index, compression, and geofence expiry.
 - Documentation for architecture, ingestion, storage, spatial query, matching, and skeleton plan.
 - Dependency-free in-memory baseline for latest state, cell lookup, sequence rejection, dedup, and nearby query.
-- Header-only typed in-process `EventBus` skeleton and initial location/state event payloads.
+- Header-only typed in-process `EventBus` with gateway, location, state, history, geofence, matching, worker, and metrics-facing payloads.
 - CTest wiring for independent unit executables.
+- In-memory Kafka producer/consumer fallback with produce, poll, commit, callback, and lag behavior.
+- Redis fallback behavior for device state, H3 cell membership, fence state, reservations, TTL expiry, and stale H3 cleanup.
+- PostGIS fallback behavior for trip history, spatial trip filters, geofence rules, and geofence audit records.
+- Processor fallback flow with dedup, sequence guard, state/history fan-out, offset commits, and temporary CSV payload parsing.
+- In-process observer-style composition for processor -> state/history -> geofence -> metrics.
+- Gateway fallback ingest methods with validation, rate limiting, temporary CSV publish, and typed gateway events.
+- Query fallback service lifecycle for latest, nearby, trip, and spatial trip reads.
+- Geofence fallback evaluation for enter, exit, old-cell exit, dwell, audit, and event publication.
+- Matching fallback service lifecycle, reservation flow, nearest strategy, deadlines, cleanup, and typed matching events.
+- Worker fallback `run_once` flows for H3 cleanup, DLQ replay, and metrics export.
 
 ### Known Boundaries
 - Kafka, Redis, PostGIS, gRPC, real H3, Prometheus, and protobuf generation are not integrated.
-- Gateway and processor currently use an internal CSV payload fallback for skeleton tests only; real Kafka payload serialization/deserialization must be protobuf-backed in Milestone 6.
+- Gateway, processor, and DLQ replay currently use an internal CSV payload fallback for skeleton tests only; real Kafka payload serialization/deserialization must be protobuf-backed in Milestone 6.
 - Gateway does not expose real gRPC/UDP endpoints yet.
 - Query service does not expose real gRPC/HTTP endpoints yet.
-- Event bus exists as a framework skeleton; most services still need to publish/subscribe through composition-root wiring.
-- Geofence and matching flows are mostly framework stubs.
+- Event bus wiring is implemented for the processor/geofence/metrics fallback path, but cross-role production deployment still needs explicit durable Kafka/protobuf boundaries.
+- Geofence and matching fallback flows are implemented, but production adapters, transport handlers, and admin APIs are still pending.
 
 ## Engineering Rules
 - Keep tests grouped by feature/function: `test_dedup_window`, `test_state_writer`, `test_nearby_handler`, `test_geofence_evaluator`, etc.
@@ -54,7 +64,7 @@ SignalRoute should use two distinct event mechanisms:
 - Avoid generic string event names on hot paths. Prefer C++ types for compile-time safety.
 - Metrics should subscribe to domain events instead of being called manually from every component where feasible.
 
-### Intended Component Flow
+### Implemented/Intended Component Flow
 
 ```text
 Gateway
@@ -63,28 +73,28 @@ Gateway
   publishes LocationRejected
 
 Processor
-  subscribes LocationValidated when running in-process
+  currently consumes Kafka fallback payloads; later may subscribe LocationValidated in fully in-process gateway mode
   publishes LocationAccepted
   publishes LocationDuplicateRejected
   publishes LocationStaleRejected
 
 StateWriter
-  subscribes LocationAccepted
+  receives StateWriteRequested through ProcessorEventHandlers
   publishes StateWriteSucceeded
   publishes StateWriteRejected
   publishes StateWriteFailed
 
 HistoryWriter
-  subscribes LocationAccepted or StateWriteSucceeded depending on final history policy
+  receives TripHistoryWriteRequested through ProcessorEventHandlers
   publishes TripHistoryWritten
   publishes TripHistoryWriteFailed
 
 GeofenceEngine
-  subscribes StateWriteSucceeded
-  publishes GeofenceEvaluationRequested internally or directly emits GeofenceEntered/Exited/Dwell
+  subscribes GeofenceEvaluationRequested through GeofenceEventHandlers
+  publishes GeofenceEntered/Exited/Dwell through fallback event/Kafka boundaries
 
 MatchingService
-  subscribes MatchRequestReceived if run in-process
+  publishes MatchRequestReceived when handle_request is called
   publishes AgentReserved, MatchCompleted, MatchFailed, MatchExpired
 
 Workers
@@ -101,17 +111,24 @@ The process role startup should wire subscriptions in one place. Components shou
 
 ## Multi-Agent Implementation Breakdown
 
+Status markers:
+- **Done fallback:** implemented and covered by unit/lifecycle tests using deterministic in-memory adapters.
+- **Production pending:** external dependency, transport, or operations work still required.
+- **Refine:** fallback exists but needs hardening, API polish, or integration tests.
+
 Use this section when running multiple agents. Each task is intentionally scoped to minimize merge conflicts. Agents should own specific files/modules and avoid editing files outside their ownership unless explicitly coordinated.
 
 ### Agent Task A1: Event Framework Core
 - **Ownership:** `src/common/events/`, `tests/unit/test_event_bus.cpp`.
-- **Goal:** Mature the typed event bus skeleton.
+- **Status:** Done fallback; refine diagnostics only if needed.
+- **Goal:** Mature the typed event bus.
 - **Items:** subscription lifetime, unsubscribe safety, handler ordering, exception policy, optional handler count diagnostics.
 - **Depends on:** none.
 - **Verification:** `test_event_bus`.
 
 ### Agent Task A2: Event Payload Catalog
 - **Ownership:** `src/common/events/*_events.h`, event-related docs.
+- **Status:** Done fallback; refine when protobuf/API contracts are finalized.
 - **Goal:** Define stable typed event payloads for gateway, processor, state, history, geofence, matching, workers, and metrics.
 - **Items:** location events, state events, history events, geofence events, matching events, worker events.
 - **Depends on:** A1.
@@ -119,6 +136,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task A3: Composition Root Wiring
 - **Ownership:** `src/main.cpp`, service startup wiring files if introduced.
+- **Status:** Done fallback for processor/geofence/metrics standalone wiring; production cross-role wiring pending.
 - **Goal:** Centralize in-process event wiring by role.
 - **Items:** create shared `EventBus`, wire processor/state/history/geofence/metrics subscriptions, keep role boundaries clear.
 - **Depends on:** A1, A2.
@@ -161,6 +179,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task D2: Nearby Query Feature
 - **Ownership:** `src/query/nearby_handler.*`, nearby tests.
+- **Status:** Done fallback; production adapter integration pending.
 - **Goal:** Complete nearby behavior independent of transport.
 - **Items:** candidate lookup, distance filtering, sorting, limit, freshness, metadata filters.
 - **Depends on:** D1 or fallback adapter.
@@ -175,6 +194,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task E2: State Writer And Sequence Guard
 - **Ownership:** `src/processor/state_writer.*`, `src/processor/sequence_guard.*`, related tests.
+- **Status:** Done fallback; Redis concurrency/integration tests pending.
 - **Goal:** Make state update correctness production-grade.
 - **Items:** old/new H3 cell handling, stale rejection, error mapping, event publication.
 - **Depends on:** A1/A2, E1.
@@ -189,6 +209,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task F2: History Writer
 - **Ownership:** `src/processor/history_writer.*`, history tests.
+- **Status:** Done fallback; production PostGIS/DLQ integration pending.
 - **Goal:** Implement history buffering, flush, DLQ fallback, and event publication.
 - **Items:** buffer by size/time, idempotent write, stale-late policy support, failure events.
 - **Depends on:** A1/A2, F1.
@@ -196,6 +217,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task G1: Kafka Wrapper
 - **Ownership:** `src/common/kafka/`, Kafka tests.
+- **Status:** Done fallback; production Kafka client integration pending.
 - **Goal:** Implement producer/consumer wrappers.
 - **Items:** produce, delivery callbacks, poll, manual commit, rebalance callbacks, lag, health.
 - **Depends on:** C2.
@@ -210,6 +232,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task H1: Gateway Service
 - **Ownership:** `src/gateway/`, gateway tests.
+- **Status:** Done fallback for direct ingest methods; gRPC/UDP and protobuf/Kafka integration pending.
 - **Goal:** Implement gRPC/UDP ingestion and event publication.
 - **Items:** service handlers, validation, rate limiting, server timestamp, Kafka publish, in-process event publish for standalone mode.
 - **Depends on:** A1/A2, G1/G2.
@@ -217,6 +240,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task I1: Processor Loop
 - **Ownership:** `src/processor/processing_loop.*`, processor tests.
+- **Status:** Done fallback for CSV payload processing and EventBus fan-out; protobuf/Kafka integration pending.
 - **Goal:** Complete Kafka-to-state/history processing.
 - **Items:** deserialize, dedup, sequence guard, publish internal events, commit offsets, DLQ behavior.
 - **Current skeleton note:** `GatewayService` and `ProcessingLoop` may use the internal CSV fallback only for unit-test scaffolding until G2 protobuf conversion lands. Do not extend CSV as a durable or public Kafka payload format.
@@ -225,6 +249,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task J1: Query Transport
 - **Ownership:** `src/query/query_service.*`, query proto handlers/tests.
+- **Status:** Handler/service fallback done; gRPC/HTTP transport pending.
 - **Goal:** Expose latest, nearby, and trip APIs.
 - **Items:** gRPC service implementation, response mapping, validation, error mapping, streaming decision.
 - **Depends on:** G2, D2, F1.
@@ -232,6 +257,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task K1: Geofence Registry And Evaluator
 - **Ownership:** `src/geofence/fence_registry.*`, `src/geofence/evaluator.*`, geofence tests.
+- **Status:** Done fallback; production H3/PostGIS/Kafka integration pending.
 - **Goal:** Complete event-driven geofence evaluation.
 - **Items:** registry reload, candidate lookup, old-cell exit checks, enter/exit events, audit writes, Kafka events.
 - **Depends on:** A1/A2, D1, E1, F1, G1.
@@ -239,6 +265,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task K2: Dwell Checker
 - **Ownership:** `src/geofence/dwell_checker.*`, dwell tests.
+- **Status:** Done fallback; production scheduling/indexing pending.
 - **Goal:** Complete dwell transition behavior.
 - **Items:** inside state tracking, threshold detection, no duplicate dwell events, event publication.
 - **Depends on:** K1.
@@ -246,6 +273,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task L1: Matching Framework
 - **Ownership:** `src/matching/`, matching tests.
+- **Status:** Done fallback; Kafka/protobuf loop and integration tests pending.
 - **Goal:** Complete match context, strategy registry usage, reservations, and result flow.
 - **Items:** built-in nearest strategy, request deadline, reservation cleanup, result publishing, events.
 - **Depends on:** A1/A2, D2, E1, G1/G2.
@@ -253,6 +281,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task M1: Workers
 - **Ownership:** `src/workers/`, worker tests.
+- **Status:** Done fallback; production retry/backoff and external dependency integration pending.
 - **Goal:** Complete cleanup, DLQ replay, and metrics worker behavior.
 - **Items:** H3 cleanup, DLQ replay, retry/backoff, event publication.
 - **Depends on:** A1/A2, E1, F1, G1.

@@ -143,6 +143,18 @@ add_executable(test_matching_service_lifecycle unit/test_matching_service_lifecy
 target_link_libraries(test_matching_service_lifecycle PRIVATE sr_matching)
 add_test(NAME test_matching_service_lifecycle COMMAND test_matching_service_lifecycle)
 
+add_executable(test_h3_cleanup_worker unit/test_h3_cleanup_worker.cpp)
+target_link_libraries(test_h3_cleanup_worker PRIVATE sr_workers)
+add_test(NAME test_h3_cleanup_worker COMMAND test_h3_cleanup_worker)
+
+add_executable(test_dlq_replay_worker unit/test_dlq_replay_worker.cpp)
+target_link_libraries(test_dlq_replay_worker PRIVATE sr_workers)
+add_test(NAME test_dlq_replay_worker COMMAND test_dlq_replay_worker)
+
+add_executable(test_metrics_reporter unit/test_metrics_reporter.cpp)
+target_link_libraries(test_metrics_reporter PRIVATE sr_workers)
+add_test(NAME test_metrics_reporter COMMAND test_metrics_reporter)
+
 add_executable(test_location_state_query unit/test_location_state_query.cpp)
 target_link_libraries(test_location_state_query PRIVATE sr_common sr_processor sr_query)
 add_test(NAME test_location_state_query COMMAND test_location_state_query)

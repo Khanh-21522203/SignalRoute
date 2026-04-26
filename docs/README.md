@@ -1,6 +1,6 @@
 # SignalRoute — Documentation
 
-> **Version:** 0.1 (Draft) · **Last Updated:** 2026-04-18
+> **Version:** 0.2 (Fallback Runtime) · **Last Updated:** 2026-04-26
 
 Welcome to the SignalRoute documentation. SignalRoute is a backend-only geospatial system written in C++ for real-time GPS/location tracking at scale. It ingests high-frequency location updates from many devices, serves low-latency reads (latest location, nearby search), evaluates geofences in real time, and retains full trip history for replay and analytics.
 
@@ -78,6 +78,23 @@ flowchart TB
 
 ## Key Concepts at a Glance
 
+### Current Implementation Baseline
+
+The repository currently contains a dependency-free fallback runtime that proves the core framework and feature behavior without external infrastructure:
+
+| Area | Current status |
+|------|----------------|
+| Runtime model | Single C++ binary with service roles for gateway, processor, query, geofence, matcher/matching, and standalone composition |
+| In-process events | Typed `EventBus` payloads and observer-style composition are implemented for processor, state/history fan-out, geofence evaluation, metrics, gateway, matching, and workers |
+| Storage adapters | Redis and PostGIS clients expose deterministic in-memory fallback behavior for unit and lifecycle tests |
+| Transport adapter | Kafka producer/consumer expose deterministic in-memory fallback behavior; production Kafka is still pending |
+| Payload format | Gateway and processor use an internal CSV payload only as temporary fallback test scaffolding; production protobuf serialization is still pending |
+| Spatial adapter | H3 interface exists with deterministic fallback cells; production H3 integration is still pending |
+| Services | Gateway, processor, query, geofence, and matching lifecycle paths are wired enough for fallback tests |
+| Workers | H3 cleanup, DLQ replay, and metrics reporter have deterministic `run_once` flows and event publication |
+
+The docs below describe the target architecture, but when they mention Kafka, Redis, PostGIS, gRPC, protobuf, Prometheus, or real H3, treat that as the production adapter target unless a section explicitly says fallback runtime.
+
 ### Data Model
 
 SignalRoute processes **location events**. Each event carries:
@@ -135,15 +152,18 @@ flowchart LR
 
 ---
 
-## Implementation Phases
+## Completion Roadmap
 
-| Phase | Focus | Status |
-|-------|-------|--------|
-| **Phase 0** | Single-node, in-process: Ingestion Gateway · In-memory State Store · Trip persistence to PostGIS · Basic Query Service (latest + nearby) | 🔲 Not started |
-| **Phase 1** | Event Queue integration (Kafka) · Location Processor as separate service · Out-of-order handling · H3 spatial index · Geofence Engine | 🔲 Not started |
-| **Phase 2** | Distributed State Store (Redis cluster) · Horizontal scaling of Ingestion Gateway and Processor · Backpressure and flow control | 🔲 Not started |
-| **Phase 3** | Trip analytics: segmentation, dwell detection, route replay · Advanced geofencing: dwell rules, complex polygons | 🔲 Not started |
-| **Phase 4** | Hardening: Prometheus metrics · Admin API · Alerting pipeline · SLA enforcement · Chaos testing | 🔲 Not started |
+Implementation is tracked by feature and subsystem, not by test phases. See [plans/finish_plan.md](./plans/finish_plan.md) for the detailed remaining work.
+
+| Area | Done in fallback runtime | Remaining production work |
+|------|--------------------------|---------------------------|
+| Core framework | Domain types, config defaults, typed events, service lifecycle, metrics counters | Stronger config validation and structured errors |
+| Ingestion and processing | Gateway fallback ingest, Kafka fallback, dedup, sequence guard, state/history writes, event-driven fan-out | gRPC/UDP servers, protobuf payloads, real Kafka integration |
+| Query | Latest, nearby, trip, downsampling, and spatial trip handlers over fallback stores | gRPC/HTTP API layer and real Redis/PostGIS adapters |
+| Geofence | Registry, enter/exit, old-cell exit checks, dwell checker, audit fallback, event publication | Real H3/PostGIS loading, Kafka geofence serialization, admin CRUD |
+| Matching | Strategy registry, nearest strategy, reservation manager, service lifecycle, request handling | Kafka/protobuf request/result loop and production reservation adapter |
+| Workers and ops | H3 cleanup, DLQ replay, metrics reporter fallback flows | Prometheus endpoint, health/admin service, CI, packaging, load tests |
 
 ---
 

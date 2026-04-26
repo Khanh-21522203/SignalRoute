@@ -1,9 +1,26 @@
 # SignalRoute — Component Specifications
 
 > **Related:** [architecture.md](./architecture.md)
-> **Version:** 0.1 (Draft)
+> **Version:** 0.2 (Fallback Runtime)
 
 Detailed specifications for every component from the C3 diagrams.
+
+## Current Fallback Runtime Map
+
+This repository currently has two layers of behavior:
+
+```text
+Production target:
+  gRPC/UDP -> Kafka protobuf -> Processor -> Redis/PostGIS/H3 -> Query/Geofence/Matching
+
+Implemented fallback runtime:
+  GatewayService methods -> in-memory Kafka fallback with CSV test payload
+  ProcessingLoop -> typed EventBus -> StateWriter/HistoryWriter/Geofence/Metrics
+  RedisClient/PostgresClient/H3Index -> deterministic in-memory adapters
+  QueryService/MatchingService/Workers -> lifecycle APIs and run_once methods for tests
+```
+
+When this document says Kafka, Redis, PostGIS, H3, protobuf, gRPC, or Prometheus, it describes the production adapter target unless the section explicitly says fallback behavior.
 
 ---
 
@@ -27,6 +44,13 @@ Detailed specifications for every component from the C3 diagrams.
 ### Purpose
 
 Stateless front-door for all device location events. Validates, authenticates, rate-limits, and enqueues events without maintaining any per-device state.
+
+Current fallback behavior:
+- `GatewayService::start` constructs a fallback `KafkaProducer`, `Validator`, and `RateLimiter`.
+- `ingest_one` validates one `LocationEvent`, applies per-device rate limiting, stamps `server_recv_ms` if absent, and publishes to the configured ingest topic.
+- `ingest_batch` validates batch limits, processes events individually, and publishes typed gateway events when an `EventBus` is supplied.
+- The fallback producer payload is internal CSV: `device_id,seq,timestamp_ms,server_recv_ms,lat,lon`. This is not the production Kafka wire contract.
+- Real gRPC and UDP servers are still part of the transport/API integration work.
 
 ### Request Lifecycle
 
@@ -85,6 +109,11 @@ UDP mode is an opt-in alternative for devices that cannot afford TLS/HTTP overhe
 
 Decouple ingestion from processing. Provides durable, ordered, replayable storage of location events, partitioned by `device_id` to guarantee per-device ordering.
 
+Current fallback behavior:
+- `KafkaProducer` and `KafkaConsumer` provide deterministic in-memory topic, poll, callback, commit, and lag behavior for feature tests.
+- The fallback is process-local and non-durable; it is a test harness, not a Kafka replacement.
+- Protobuf serialization is not generated yet. CSV fallback payload parsing must be removed from production paths during the protobuf/Kafka milestone.
+
 ### Topic Design
 
 | Topic | Partitioning | Retention | Description |
@@ -122,6 +151,13 @@ message LocationEvent {
 ### Purpose
 
 Stateful per-partition consumer. Owns the correctness path: dedup, sequence guard, H3 encoding, state update, history write, geofence notification.
+
+Current fallback behavior:
+- `ProcessingLoop` polls the fallback consumer, parses the temporary CSV payload, applies `DedupWindow` and `SequenceGuard`, and commits handled offsets.
+- In EventBus mode, the processor publishes `LocationAccepted`, `LocationDuplicateRejected`, and `LocationStaleRejected` instead of directly invoking every downstream component.
+- `CompositionRoot` fans accepted events out to state and history requests.
+- `ProcessorEventHandlers` invoke `StateWriter` and `HistoryWriter`; state success then triggers geofence evaluation.
+- `MetricsEventHandlers` observe location, state, history, and geofence events.
 
 ### Processing Loop
 
@@ -244,6 +280,12 @@ Events that arrive late but within `out_of_order_tolerance_s` (default 60 s) of 
 
 Single-record per device — the latest known position. Serves as the primary source of truth for all real-time reads.
 
+Current fallback behavior:
+- `RedisClient` keeps device state, H3 cell membership, fence state, and reservations in memory.
+- Device state writes enforce sequence freshness and move H3 membership.
+- Reservation helpers enforce holder ownership and TTL expiry for matching.
+- `remove_stale_cell_members` removes H3 cell members whose device state no longer exists; `H3CleanupWorker::run_once` uses this for deterministic cleanup tests.
+
 ### Redis Key Schema
 
 | Key | Type | Fields |
@@ -281,6 +323,11 @@ Devices that have not sent an update in `device_ttl_s` (default 1 hour) are expi
 ### Purpose
 
 Persistent append-only store of all accepted location events, enabling trip replay, analytics, distance calculation, and historical geofence queries.
+
+Current fallback behavior:
+- `PostgresClient` stores trip points and geofence audit events in memory.
+- Trip queries support device/time range, limit, downsampling in `TripHandler`, and circular spatial filtering.
+- `HistoryWriter` buffers accepted events and flushes to the fallback PostGIS adapter, with DLQ fallback through the fallback Kafka producer on write failure.
 
 ### Schema
 
@@ -341,6 +388,11 @@ flowchart TB
 ### Purpose
 
 Serves all consumer-facing read requests. Stateless — reads from Redis (latest, nearby) and PostGIS (history). Horizontally scalable.
+
+Current fallback behavior:
+- `QueryService::start` constructs fallback Redis/PostGIS/H3 adapters and latest/nearby/trip handlers.
+- `latest`, `nearby`, `trip`, and `trip_spatial` are callable directly for lifecycle and feature tests.
+- Real gRPC/HTTP query endpoints are still pending.
 
 ### Latest Location Handler
 
@@ -412,6 +464,12 @@ flowchart LR
 ### Purpose
 
 Evaluates device position changes against registered geofences and emits enter/exit/dwell events to downstream consumers.
+
+Current fallback behavior:
+- `FenceRegistry` stores active fence rules and can load from the fallback PostGIS repository.
+- `Evaluator` unions candidates from old and new H3 cells, performs point-in-polygon checks, updates fallback fence state, writes fallback audit rows, and publishes geofence events.
+- `GeofenceEventHandlers` subscribe to `GeofenceEvaluationRequested` for in-process observer-style wiring.
+- `DwellChecker::check_once` transitions eligible `INSIDE` records to `DWELL` once per policy.
 
 ### Fence Registry
 
@@ -495,6 +553,12 @@ message GeofenceEvent {
 ## Background Workers
 
 All workers run as background threads within their respective service processes.
+
+Current fallback behavior:
+- `H3CleanupWorker::run_once` removes stale H3 cell members through the fallback Redis client and publishes `H3CleanupCompleted` when work is observed.
+- `DLQReplayWorker::run_once` consumes fallback DLQ messages, parses the temporary CSV payload, re-inserts valid trip points into the fallback PostGIS client, commits handled offsets, and publishes replay success/failure events.
+- `MetricsReporter::run_once` exports the fallback metrics text and publishes `DependencyRecovered{"metrics"}`.
+- Long-running `run` loops call `run_once` on a fixed interval, but production retry/backoff policies remain future work.
 
 ```mermaid
 flowchart TB

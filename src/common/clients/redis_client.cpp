@@ -167,6 +167,37 @@ std::vector<std::string> RedisClient::get_devices_in_cells(const std::vector<int
     return {unique.begin(), unique.end()};
 }
 
+std::pair<std::size_t, std::size_t> RedisClient::remove_stale_cell_members() {
+    std::lock_guard lock(mu_);
+    std::size_t removed = 0;
+    std::size_t touched = 0;
+
+    for (auto cell_it = cell_devices_.begin(); cell_it != cell_devices_.end();) {
+        auto& devices = cell_it->second;
+        const auto before = devices.size();
+        for (auto device_it = devices.begin(); device_it != devices.end();) {
+            if (device_states_.find(*device_it) == device_states_.end()) {
+                device_it = devices.erase(device_it);
+            } else {
+                ++device_it;
+            }
+        }
+
+        const auto removed_from_cell = before - devices.size();
+        if (removed_from_cell > 0) {
+            removed += removed_from_cell;
+            ++touched;
+        }
+        if (devices.empty()) {
+            cell_it = cell_devices_.erase(cell_it);
+        } else {
+            ++cell_it;
+        }
+    }
+
+    return {removed, touched};
+}
+
 void RedisClient::set_fence_state(const std::string& device_id,
                                    const std::string& fence_id,
                                    FenceState state, int64_t timestamp_ms) {

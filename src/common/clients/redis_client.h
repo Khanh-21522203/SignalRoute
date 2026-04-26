@@ -24,6 +24,7 @@
 #include <optional>
 #include <cstdint>
 #include <mutex>
+#include <utility>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -109,6 +110,15 @@ public:
      * TODO: Implement using pipelined SMEMBERS, return union of all sets.
      */
     std::vector<std::string> get_devices_in_cells(const std::vector<int64_t>& cells);
+
+    /**
+     * Remove H3 cell members that no longer have a device state record.
+     * Fallback helper for H3 cleanup worker tests until Redis keyspace
+     * notifications and production expiry handling are integrated.
+     *
+     * @return {removed_devices, touched_cells}
+     */
+    std::pair<std::size_t, std::size_t> remove_stale_cell_members();
 
     // ── Fence State (Hash: {prefix}:fence:{device_id}:{fence_id}) ──
 

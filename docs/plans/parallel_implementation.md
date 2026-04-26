@@ -4,11 +4,14 @@
 This file defines the preparation required before running multiple agents or developers in parallel. The goal is to prevent merge conflicts, contract drift, duplicate abstractions, and incompatible event/config names.
 
 ## Current Baseline
-- The project builds and tests from the shared baseline.
+- The project builds and tests from the shared fallback runtime baseline.
 - Tests are organized by feature/function, not by phase.
 - In-process communication uses typed `EventBus` payloads under `src/common/events/`.
 - Durable cross-process communication remains Kafka.
 - The tracked completion roadmap is `docs/plans/finish_plan.md`.
+- Gateway/processor/DLQ fallback payload parsing uses internal CSV only for tests. Protobuf/Kafka serialization remains a production integration task.
+- Redis, PostGIS, Kafka, H3, and metrics adapters currently have deterministic in-memory fallback behavior for unit and lifecycle tests.
+- Processor/geofence/metrics observer wiring is implemented for in-process fallback composition.
 
 ## Required Before Parallel Work
 
@@ -90,34 +93,34 @@ An agent must report:
 - whether it touched shared contracts
 
 ### 6. Dependency Order
-Start work in this order unless deliberately coordinated:
+Start remaining production work in this order unless deliberately coordinated:
 
-1. Config loader and canonical config cleanup
-2. Event payload/composition contract hardening
-3. Domain conversion tests
-4. Dependency strategy and CMake dependency integration
-5. H3 adapter
-6. Redis adapter and state writer
-7. PostGIS adapter and history writer
-8. Kafka/protobuf transport
-9. Gateway and processor loops
-10. Query service transport
-11. Geofence engine
-12. Matching framework
-13. Workers, metrics, admin, CI, packaging
+1. Dependency strategy and CMake dependency integration
+2. Protobuf/gRPC generation and domain conversion boundaries
+3. Real Kafka producer/consumer adapters and protobuf payload serialization
+4. Real H3 adapter behind the existing `H3Index` interface
+5. Real Redis adapter behind the existing state/fence/reservation contract
+6. Real PostGIS adapter behind the existing history/geofence repository contract
+7. Gateway gRPC/UDP transport over the existing validation/rate-limit/publish flow
+8. Query gRPC/HTTP transport over the existing latest/nearby/trip handlers
+9. Processor production Kafka-to-state/history loop replacing CSV fallback parsing
+10. Geofence production registry loading, Kafka event serialization, and admin CRUD
+11. Matching production Kafka request/result loop
+12. Workers, Prometheus/admin health, retry/backoff, CI, packaging, and performance tests
 
 ## Safe Initial Parallel Batch
-These tasks can run in parallel with low conflict risk. This is the recommended first batch because the scopes are naturally disjoint and avoid cross-cutting runtime wiring.
+These tasks can run in parallel with low conflict risk from the current fallback baseline. They are recommended before broad production adapter work because they clarify external dependency choices and preserve existing contracts.
 
 | Task | Owner Scope | Avoid Touching |
 |---|---|---|
-| Config loader | `src/common/config/`, config tests | Event payloads, storage clients |
-| Domain tests | `src/common/types/`, type tests | Config parser, transport |
-| Event payload review | `src/common/events/` | Service implementations |
-| Spatial tests | `src/common/spatial/`, spatial tests | Real dependency CMake until dependency strategy is decided |
-| README/build docs | `README.md`, docs only | Source interfaces |
+| Dependency strategy | root `CMakeLists.txt`, dependency docs/toolchain only | Runtime behavior, generated files until strategy is accepted |
+| Protobuf generation spike | `proto/`, generated build wiring in isolated branch/scope | Gateway/query service logic, CSV fallback removal |
+| H3 adapter spike | `src/common/spatial/`, `test_h3_index` | Query/geofence behavior changes |
+| Redis adapter spike | `src/common/clients/redis_client.*`, Redis integration tests | State writer interface changes |
+| PostGIS adapter spike | `src/common/clients/postgres_client.*`, migrations, PostGIS integration tests | History writer policy changes |
+| API transport design docs | docs/API and transport docs only | Source interfaces |
 
-Run only the tasks above in the first parallel batch unless the owners explicitly agree to widen scope. Defer adapters, service loops, dependency integration, and generated protobuf work until the contracts and canonical config names are stable.
+Run only disjoint scopes in a batch unless owners explicitly agree to widen scope. Do not remove fallback behavior until equivalent production adapter tests exist.
 
 ## Unsafe Parallel Pairs
 Do not run these at the same time without coordination:
@@ -128,5 +131,5 @@ Do not run these at the same time without coordination:
 - Config schema changes and config loader implementation
 - CMake dependency strategy and any task adding external dependencies
 
-## First Recommended Implementation Task
-Implement `Config::load` and config validation using `config/signalroute.toml` as the canonical source. Add `test_config_loader` before starting Redis/Kafka/PostGIS work.
+## Next Recommended Implementation Task
+Pick the dependency strategy and CMake integration path first. That decision unblocks real H3, protobuf/gRPC, Kafka, Redis, PostGIS, and Prometheus work without forcing each feature owner to invent incompatible dependency wiring.

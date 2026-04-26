@@ -1,8 +1,32 @@
 # SignalRoute — Architecture (C4 Model)
 
-> **Version:** 0.1 (Draft) · **Last Updated:** 2026-04-18 · **Status:** In Review
+> **Version:** 0.2 (Fallback Runtime) · **Last Updated:** 2026-04-26 · **Status:** In Review
 
 This document describes the architecture of **SignalRoute**, a backend-only geospatial system for real-time GPS/location tracking at scale. It follows the [C4 model](https://c4model.com/) (Context → Containers → Components) and covers service boundaries, data flows, core invariants, concurrency strategy, and scaling design.
+
+## Current Runtime Baseline
+
+SignalRoute now has a working dependency-free fallback runtime for feature development. The fallback runtime preserves production-facing interfaces where possible, but replaces external infrastructure with deterministic in-memory adapters so unit and lifecycle tests can run without Kafka, Redis, PostGIS, gRPC, protobuf generation, Prometheus, or real H3.
+
+```text
+Single process / standalone mode
+
+GatewayService::ingest_batch
+  -> KafkaProducer fallback topic payload
+  -> KafkaConsumer fallback poll
+  -> ProcessingLoop
+       -> LocationAccepted event
+       -> CompositionRoot fan-out
+            -> StateWriteRequested -> ProcessorEventHandlers -> StateWriter -> RedisClient fallback
+            -> TripHistoryWriteRequested -> ProcessorEventHandlers -> HistoryWriter -> PostgresClient fallback
+            -> StateWriteSucceeded -> GeofenceEvaluationRequested -> GeofenceEventHandlers -> Evaluator
+       -> MetricsEventHandlers observe events
+  -> QueryService reads RedisClient/PostgresClient fallbacks
+  -> MatchingService uses NearbyHandler + ReservationManager fallbacks
+  -> Workers publish worker events from deterministic run_once methods
+```
+
+Production adapters are still the target for the external boundaries. The temporary gateway/processor CSV payload is only test scaffolding until protobuf serialization is generated and wired at the Kafka boundary.
 
 ---
 
@@ -101,6 +125,8 @@ C4Context
 
 A **container** is a deployable unit. All C++ services compile from one binary (`trackmesh --role=…`).
 
+The production design uses Kafka/Redis/PostGIS/gRPC as shown below. The current fallback runtime keeps the same service boundaries but can run the services in one process with a shared typed `EventBus`.
+
 ```mermaid
 C4Container
     title Container Diagram — SignalRoute Cluster
@@ -125,7 +151,7 @@ C4Container
     Rel(proc, kafka, "Consume events", "Kafka consumer")
     Rel(proc, redis, "Update latest state", "Redis CAS")
     Rel(proc, postgis, "Append trip points", "SQL INSERT")
-    Rel(proc, ge, "Notify state change", "In-process / gRPC")
+    Rel(proc, ge, "Notify state change", "Typed EventBus in-process; durable events via Kafka where needed")
     Rel(qs, redis, "Read latest state", "Redis GET")
     Rel(qs, postgis, "Query trip history", "SQL SELECT")
 
@@ -137,9 +163,10 @@ C4Container
 | Container | Role | Instances | State |
 |-----------|------|-----------|-------|
 | **Ingestion Gateway** | Receive, validate, enqueue | 1–N (stateless, load balanced) | Stateless |
-| **Location Processor** | Process, deduplicate, persist | 1 per Kafka partition group | Stateful (per-device dedup window) |
-| **Query Service** | Serve all read queries | 1–N (stateless, read-only) | Stateless (reads from Redis + PostGIS) |
-| **Geofence Engine** | Evaluate fences, emit events | 1–N (each holds full fence registry) | In-memory fence registry |
+| **Location Processor** | Process, deduplicate, persist, publish in-process facts | 1 per Kafka partition group | Stateful (per-device dedup window) |
+| **Query Service** | Serve latest, nearby, trip, and spatial trip reads | 1–N (stateless, read-only) | Stateless (reads from Redis + PostGIS adapters) |
+| **Geofence Engine** | Evaluate fences, audit events, emit enter/exit/dwell | 1–N (each holds full fence registry) | In-memory fence registry |
+| **Matching Service** | Resolve match requests with strategy plugins and reservations | 1–N | Redis-backed reservation state |
 
 ---
 
@@ -224,7 +251,7 @@ flowchart TB
 
     GEF["🚧 Geofence Notifier
     ──────────────
-    • Notify Geofence Engine of state change
+    • Publish GeofenceEvaluationRequested after state write
     • Pass previous H3 cell + new H3 cell
     • Engine evaluates delta only"]
 
@@ -233,6 +260,14 @@ flowchart TB
     H3C --> HS
     H3C --> GEF
 ```
+
+Current fallback behavior:
+- `ProcessingLoop` can run in direct mode or EventBus-backed mode.
+- Accepted events publish `LocationAccepted`; duplicate and stale rejections publish typed rejection events.
+- `CompositionRoot` maps `LocationAccepted` to `StateWriteRequested` and `TripHistoryWriteRequested`.
+- `ProcessorEventHandlers` call `StateWriter` and `HistoryWriter`, then publish state/history result events.
+- `StateWriteSucceeded` fans out to `GeofenceEvaluationRequested`.
+- Kafka payload parsing is the temporary internal CSV fallback, not the production wire format.
 
 ---
 
@@ -307,11 +342,17 @@ flowchart TB
 
     EMIT["📡 Event Emitter
     ──────────────
-    • Publish GeofenceEvent to Kafka topic
+    • Publish GeofenceEvent to Kafka topic or typed fallback event
     • Consumers: alert systems, webhooks, dashboards"]
 
     REG --> EVAL --> ESTATE --> EMIT
 ```
+
+Current fallback behavior:
+- `GeofenceEngine::start(config, event_bus)` subscribes through `GeofenceEventHandlers`.
+- `Evaluator` checks new and old H3 cells so exits are not missed when a device moves out of a fence cell.
+- Enter, exit, and dwell transitions update the fallback fence state, audit to the fallback PostGIS client, and publish through the fallback Kafka producer/event boundary.
+- `DwellChecker::check_once` provides deterministic dwell evaluation for tests.
 
 ---
 
