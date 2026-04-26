@@ -14,7 +14,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Dependency-free in-memory baseline for latest state, cell lookup, sequence rejection, dedup, and nearby query.
 - Header-only typed in-process `EventBus` with gateway, location, state, history, geofence, matching, worker, and metrics-facing payloads.
 - CTest wiring for independent unit executables.
-- In-memory Kafka producer/consumer fallback with produce, poll, commit, callback, and lag behavior.
+- In-memory Kafka producer/consumer fallback with produce, poll, commit, callback, and lag behavior; optional librdkafka++ adapter code is gated behind `SR_ENABLE_REAL_KAFKA`.
 - Redis fallback behavior for device state, H3 cell membership, fence state, reservations, TTL expiry, and stale H3 cleanup.
 - PostGIS fallback behavior for trip history, spatial trip filters, geofence rules, and geofence audit records.
 - Processor fallback flow with dedup, sequence guard, state/history fan-out, offset commits, and shared location payload decoding that uses protobuf when enabled and CSV as fallback.
@@ -223,9 +223,9 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task G1: Kafka Wrapper
 - **Ownership:** `src/common/kafka/`, Kafka tests.
-- **Status:** Done fallback; production Kafka client integration pending.
+- **Status:** Done fallback; optional librdkafka++ producer/consumer adapter path added behind `SR_ENABLE_REAL_KAFKA`; broker-backed compile/run verification pending until RdKafka CMake package is installed.
 - **Goal:** Implement producer/consumer wrappers.
-- **Items:** produce, delivery callbacks, poll, manual commit, rebalance callbacks, lag, health.
+- **Items:** produce, delivery callbacks, poll, manual commit, lag, health implemented at the wrapper boundary; rebalance callbacks and broker integration tests pending.
 - **Depends on:** C2.
 - **Verification:** Kafka integration tests.
 
@@ -496,17 +496,17 @@ Shared payload codecs now cover location, geofence events, matching request/resu
 - Enable protobuf and gRPC generation in CMake.
 - Link generated proto library to relevant modules.
 - Implement Kafka producer wrapper:
-  - topic/key/payload produce
-  - delivery callback
-  - flush
-  - error reporting
-  - backpressure detection
+  - topic/key/payload produce (fallback done; librdkafka++ adapter path added)
+  - delivery callback (fallback done; librdkafka++ adapter path added)
+  - flush (fallback done; librdkafka++ adapter path added)
+  - error reporting (fallback done; librdkafka++ adapter path added)
+  - backpressure detection (pending)
 - Implement Kafka consumer wrapper:
-  - subscribe
-  - poll
-  - manual commit
-  - rebalance callbacks
-  - lag reporting
+  - subscribe (fallback done; librdkafka++ adapter path added)
+  - poll (fallback done; librdkafka++ adapter path added)
+  - manual commit (fallback done; librdkafka++ adapter path added)
+  - rebalance callbacks (pending)
+  - lag reporting (fallback done; librdkafka++ adapter path added)
 - Implement location event serialization/deserialization. (Done for shared runtime codec; real Kafka adapter pending.)
 - Implement geofence event serialization. (Done for shared runtime codec; real Kafka adapter pending.)
 - Implement matching request/result serialization. (Done for shared runtime codec; matching Kafka loop pending.)

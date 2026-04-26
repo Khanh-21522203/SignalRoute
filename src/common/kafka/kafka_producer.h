@@ -13,6 +13,7 @@
 #include <string>
 #include <functional>
 #include <cstdint>
+#include <memory>
 
 namespace signalroute {
 
@@ -69,9 +70,8 @@ public:
 
 private:
     KafkaConfig config_;
-
-    // TODO: Add cppkafka::Producer instance
-    // std::unique_ptr<cppkafka::Producer> producer_;
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 } // namespace signalroute

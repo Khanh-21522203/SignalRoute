@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <atomic>
 #include <unordered_map>
+#include <memory>
 
 namespace signalroute {
 
@@ -99,9 +100,8 @@ private:
     std::unordered_map<std::string, int64_t> next_offsets_;
     std::unordered_map<std::string, int64_t> committed_offsets_;
     std::optional<KafkaMessage> last_polled_;
-
-    // TODO: Add cppkafka::Consumer instance
-    // std::unique_ptr<cppkafka::Consumer> consumer_;
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 } // namespace signalroute

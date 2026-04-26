@@ -36,7 +36,7 @@ The provider value does not install dependencies by itself. It records the inten
 | `SR_ENABLE_REAL_H3` | `OFF` | `h3::h3` or `h3` | Real H3 cell encoding, grid disk, polygon covering |
 | `SR_ENABLE_REAL_REDIS` | `OFF` | `hiredis::hiredis`, `redis++::redis++` | Real state, H3 index, fence state, reservations |
 | `SR_ENABLE_REAL_POSTGIS` | `OFF` | `PostgreSQL::PostgreSQL` | Real trip history, spatial queries, geofence repositories |
-| `SR_ENABLE_REAL_KAFKA` | `OFF` | `RdKafka::rdkafka++` or equivalent | Durable publish/consume, offsets, lag, DLQ transport |
+| `SR_ENABLE_REAL_KAFKA` | `OFF` | `RdKafka::rdkafka++` or `rdkafka++` | Durable publish/consume, offsets, lag, DLQ transport |
 | `SR_ENABLE_PROMETHEUS` | `OFF` | `prometheus-cpp::core` | Prometheus exporter |
 | `SR_ENABLE_TOMLPLUSPLUS` | `OFF` | `tomlplusplus::tomlplusplus` | Production TOML parser |
 
@@ -50,6 +50,7 @@ The provider value does not install dependencies by itself. It records the inten
   - gRPC mode: adds generated `.grpc.pb.*` sources to the same target.
 - `sr_common` links `sr_dependencies` and `signalroute_proto`, so adapter code can use stable compile definitions.
 - `src/common/proto/` owns dependency-free wire-shape structs and domain conversion helpers. Generated protobuf types should adapt to these helpers instead of leaking through service/domain code.
+- Real Kafka adapter code is hidden behind the existing wrapper API and pimpl storage; public headers do not expose librdkafka types.
 - `.proto` files use package `signalroute.v1`, producing generated C++ types under `signalroute::v1`. This intentionally avoids name collisions with domain types such as `signalroute::LocationEvent`.
 
 ## Adapter Rule
@@ -62,7 +63,7 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 - keep generated protobuf includes out of domain headers. Generated types belong at API/transport boundaries.
 
 ## Recommended Implementation Order
-1. Add real Kafka producer/consumer adapters behind `KafkaProducer` and `KafkaConsumer`, routing existing shared protobuf payload codecs through durable topics.
+1. Install/provide the RdKafka CMake package and run broker-backed compile/integration verification for the `SR_ENABLE_REAL_KAFKA` adapter path.
 2. Add the matching production Kafka request/result loop using the matching payload codec.
 3. Enable gRPC service stub generation once `gRPC::grpc++` and `gRPC::grpc_cpp_plugin` are available.
 4. Remove or narrow runtime CSV public paths only after durable Kafka/protobuf integration tests pass for each boundary.
@@ -85,4 +86,4 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
 
 ## Current Boundary
-Batch 22 has shared runtime payload codecs for location, geofence events, and matching request/result messages. Gateway, processor, geofence evaluator/dwell checker, and DLQ replay use protobuf payloads when `SR_ENABLE_PROTOBUF=ON` and preserve CSV as the default fallback build format plus decoder fallback. Matching still needs the durable Kafka request/result loop, and gRPC service stubs remain gated by `SR_ENABLE_GRPC`.
+Batch 23 adds an optional librdkafka++ adapter path behind `KafkaProducer` and `KafkaConsumer` while preserving the in-memory fallback as the default. Local verification confirms fallback and protobuf builds pass, and `SR_ENABLE_REAL_KAFKA=ON` fails clearly because this machine lacks `RdKafkaConfig.cmake`. Broker-backed compile/run verification remains pending until RdKafka is installed. Matching still needs the durable Kafka request/result loop, and gRPC service stubs remain gated by `SR_ENABLE_GRPC`.

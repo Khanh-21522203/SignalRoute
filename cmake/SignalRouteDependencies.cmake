@@ -52,7 +52,7 @@ endif()
 
 if(SR_ENABLE_REAL_KAFKA)
     find_package(RdKafka CONFIG REQUIRED)
-    sr_link_one_of("librdkafka" RdKafka::rdkafka++ RdKafka::rdkafka rdkafka++ rdkafka)
+    sr_link_one_of("librdkafka++" RdKafka::rdkafka++ rdkafka++)
 endif()
 
 if(SR_ENABLE_PROMETHEUS)

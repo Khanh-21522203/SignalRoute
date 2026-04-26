@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <atomic>
+#include <stdexcept>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -96,11 +97,59 @@ void test_poll_loop_commits_successful_messages() {
     assert(consumer.get_lag().front().second == 0);
 }
 
+void test_empty_topic_reports_callback_error_and_throws() {
+    signalroute::KafkaProducer producer(signalroute::KafkaConfig{});
+
+    bool callback_called = false;
+    bool callback_success = true;
+    std::string callback_error;
+    bool threw = false;
+
+    try {
+        producer.produce("", "dev-1", "payload", [&](bool success, const std::string& error) {
+            callback_called = true;
+            callback_success = success;
+            callback_error = error;
+        });
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+
+    assert(threw);
+    assert(callback_called);
+    assert(!callback_success);
+    assert(callback_error == "topic must not be empty");
+}
+
+void test_poll_loop_does_not_commit_failed_messages() {
+    const std::string topic = topic_name("poll_loop_failed");
+    signalroute::KafkaProducer producer(signalroute::KafkaConfig{});
+    signalroute::KafkaConsumer consumer(signalroute::KafkaConfig{}, {topic});
+
+    producer.produce(topic, "dev-1", "payload-1");
+
+    std::atomic<bool> stop{false};
+    int seen = 0;
+    std::thread thread([&] {
+        consumer.poll_loop([&](const signalroute::KafkaMessage&) {
+            ++seen;
+            stop.store(true);
+            return false;
+        }, stop);
+    });
+    thread.join();
+
+    assert(seen == 1);
+    assert(consumer.get_lag().front().second == 1);
+}
+
 int main() {
     std::cout << "test_kafka_transport:\n";
     test_producer_callback_and_consumer_poll();
     test_commit_updates_lag();
     test_poll_loop_commits_successful_messages();
+    test_empty_topic_reports_callback_error_and_throws();
+    test_poll_loop_does_not_commit_failed_messages();
     std::cout << "All Kafka transport tests passed.\n";
     return 0;
 }
