@@ -39,6 +39,10 @@ add_executable(test_postgres_client unit/test_postgres_client.cpp)
 target_link_libraries(test_postgres_client PRIVATE sr_common)
 add_test(NAME test_postgres_client COMMAND test_postgres_client)
 
+add_executable(test_kafka_transport unit/test_kafka_transport.cpp)
+target_link_libraries(test_kafka_transport PRIVATE sr_common)
+add_test(NAME test_kafka_transport COMMAND test_kafka_transport)
+
 add_executable(test_dedup_window unit/test_dedup_window.cpp)
 target_link_libraries(test_dedup_window PRIVATE sr_processor)
 add_test(NAME test_dedup_window COMMAND test_dedup_window)
@@ -54,6 +58,10 @@ add_test(NAME test_state_writer COMMAND test_state_writer)
 add_executable(test_history_writer unit/test_history_writer.cpp)
 target_link_libraries(test_history_writer PRIVATE sr_processor)
 add_test(NAME test_history_writer COMMAND test_history_writer)
+
+add_executable(test_processing_loop unit/test_processing_loop.cpp)
+target_link_libraries(test_processing_loop PRIVATE sr_processor)
+add_test(NAME test_processing_loop COMMAND test_processing_loop)
 
 add_executable(test_nearby_handler unit/test_nearby_handler.cpp)
 target_link_libraries(test_nearby_handler PRIVATE sr_query sr_processor)

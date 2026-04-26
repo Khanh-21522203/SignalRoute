@@ -1,84 +1,100 @@
 #include "kafka_consumer.h"
+
+#include <algorithm>
+#include <chrono>
 #include <iostream>
+#include <thread>
 
 // TODO: #include <cppkafka/cppkafka.h>
 
 namespace signalroute {
+namespace kafka_fallback {
+
+std::optional<KafkaMessage> read_message(const std::string& topic, int64_t offset);
+int64_t topic_size(const std::string& topic);
+
+} // namespace kafka_fallback
+namespace {
+
+std::string partition_key(const std::string& topic, int32_t partition) {
+    return topic + "#" + std::to_string(partition);
+}
+
+} // namespace
 
 KafkaConsumer::KafkaConsumer(const KafkaConfig& config,
                              const std::vector<std::string>& topics)
     : config_(config), topics_(topics)
 {
-    // TODO: Configure and create consumer
-    //
-    //   cppkafka::Configuration kafka_config = {
-    //       {"metadata.broker.list", config.brokers},
-    //       {"group.id", config.consumer_group},
-    //       {"enable.auto.commit", false},      // Manual commit for at-least-once
-    //       {"auto.offset.reset", "earliest"},
-    //       {"max.poll.interval.ms", 300000},
-    //       {"session.timeout.ms", 30000},
-    //   };
-    //
-    //   consumer_ = std::make_unique<cppkafka::Consumer>(kafka_config);
-    //   consumer_->subscribe(topics);
-    //
-    //   // Set rebalance callback for graceful partition reassignment
-    //   consumer_->set_assignment_callback([](const auto& partitions) {
-    //       // Log partition assignment
-    //   });
-    //   consumer_->set_revocation_callback([](const auto& partitions) {
-    //       // Commit offsets before partition loss
-    //   });
-
-    std::cerr << "[KafkaConsumer] WARNING: Kafka consumer not yet implemented.\n";
+    // TODO: Configure and create cppkafka consumer.
+    for (const auto& topic : topics_) {
+        next_offsets_[topic] = 0;
+        committed_offsets_[partition_key(topic, 0)] = 0;
+    }
+    std::cerr << "[KafkaConsumer] WARNING: using in-memory Kafka fallback.\n";
 }
 
-KafkaConsumer::~KafkaConsumer() {
-    // TODO: consumer_->unsubscribe();
-}
+KafkaConsumer::~KafkaConsumer() = default;
 
-std::optional<KafkaMessage> KafkaConsumer::poll(int /*timeout_ms*/) {
-    // TODO: Implement using cppkafka::Consumer::poll()
-    //   auto msg = consumer_->poll(std::chrono::milliseconds(timeout_ms));
-    //   if (!msg || msg.get_error()) return std::nullopt;
-    //   return KafkaMessage{msg.get_topic(), msg.get_partition(), msg.get_offset(),
-    //                       std::string(msg.get_key()), std::string(msg.get_payload()),
-    //                       msg.get_timestamp().get_timestamp().count()};
+std::optional<KafkaMessage> KafkaConsumer::poll(int timeout_ms) {
+    for (const auto& topic : topics_) {
+        const int64_t next_offset = next_offsets_[topic];
+        auto message = kafka_fallback::read_message(topic, next_offset);
+        if (message) {
+            next_offsets_[topic] = next_offset + 1;
+            last_polled_ = *message;
+            return message;
+        }
+    }
+
+    if (timeout_ms > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(timeout_ms));
+    }
     return std::nullopt;
 }
 
 void KafkaConsumer::poll_loop(MessageHandler handler,
                                const std::atomic<bool>& should_stop) {
-    // TODO: Implement main processing loop
-    //
-    //   while (!should_stop.load()) {
-    //       auto msg = poll(100);
-    //       if (!msg) continue;
-    //
-    //       bool ok = handler(*msg);
-    //       if (ok) {
-    //           commit(*msg);
-    //       }
-    //       // If !ok, message will be redelivered on restart (at-least-once)
-    //   }
+    while (!should_stop.load()) {
+        auto msg = poll(10);
+        if (!msg) {
+            continue;
+        }
+
+        if (handler(*msg)) {
+            commit(*msg);
+        }
+    }
 }
 
 void KafkaConsumer::commit() {
-    // TODO: consumer_->commit();
+    if (last_polled_) {
+        commit(*last_polled_);
+    }
 }
 
-void KafkaConsumer::commit(const KafkaMessage& /*msg*/) {
-    // TODO: consumer_->commit(msg);
+void KafkaConsumer::commit(const KafkaMessage& msg) {
+    const auto key = partition_key(msg.topic, msg.partition);
+    auto& committed = committed_offsets_[key];
+    committed = std::max(committed, msg.offset + 1);
 }
 
 std::vector<std::pair<int32_t, int64_t>> KafkaConsumer::get_lag() const {
-    // TODO: Query committed vs high watermark offsets
-    return {};
+    std::vector<std::pair<int32_t, int64_t>> result;
+    result.reserve(topics_.size());
+
+    for (const auto& topic : topics_) {
+        const int64_t high_watermark = kafka_fallback::topic_size(topic);
+        const auto it = committed_offsets_.find(partition_key(topic, 0));
+        const int64_t committed = it == committed_offsets_.end() ? 0 : it->second;
+        result.push_back({0, std::max<int64_t>(0, high_watermark - committed)});
+    }
+
+    return result;
 }
 
 bool KafkaConsumer::is_connected() const {
-    return false;
+    return true;
 }
 
 } // namespace signalroute

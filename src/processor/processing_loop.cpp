@@ -5,8 +5,49 @@
 #include "state_writer.h"
 #include "history_writer.h"
 #include "../common/metrics/metrics.h"
+#include "../common/types/location_event.h"
+
+#include <chrono>
+#include <exception>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <vector>
 
 namespace signalroute {
+namespace {
+
+std::vector<std::string> split_csv(const std::string& payload) {
+    std::vector<std::string> fields;
+    std::stringstream in(payload);
+    std::string field;
+    while (std::getline(in, field, ',')) {
+        fields.push_back(field);
+    }
+    return fields;
+}
+
+std::optional<LocationEvent> parse_location_payload(const std::string& payload) {
+    const auto fields = split_csv(payload);
+    if (fields.size() != 6) {
+        return std::nullopt;
+    }
+
+    try {
+        LocationEvent event;
+        event.device_id = fields[0];
+        event.seq = static_cast<uint64_t>(std::stoull(fields[1]));
+        event.timestamp_ms = std::stoll(fields[2]);
+        event.server_recv_ms = std::stoll(fields[3]);
+        event.lat = std::stod(fields[4]);
+        event.lon = std::stod(fields[5]);
+        return event;
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+}
+
+} // namespace
 
 ProcessingLoop::ProcessingLoop(
     KafkaConsumer& consumer,
@@ -25,67 +66,57 @@ ProcessingLoop::ProcessingLoop(
 {}
 
 void ProcessingLoop::run(std::atomic<bool>& should_stop) {
-    // TODO: Implement the main processing loop
-    //
-    //   auto flush_timer = steady_clock::now();
-    //
-    //   while (!should_stop.load()) {
-    //       // 1. Poll Kafka
-    //       auto msg = consumer_.poll(100);
-    //       if (!msg) {
-    //           // Check flush timer
-    //           if (history_writer_.buffer_size() > 0 &&
-    //               elapsed(flush_timer) > config_.history_flush_interval_ms) {
-    //               history_writer_.flush();
-    //               flush_timer = steady_clock::now();
-    //           }
-    //           continue;
-    //       }
-    //
-    //       // 2. Deserialize
-    //       auto event = deserialize_location_event(msg->payload);
-    //
-    //       // 3. Dedup
-    //       if (dedup_.is_duplicate(event.device_id, event.seq)) {
-    //           Metrics::instance().inc_dedup_hit();
-    //           consumer_.commit(*msg);
-    //           continue;
-    //       }
-    //       dedup_.mark_seen(event.device_id, event.seq);
-    //
-    //       // 4. Sequence guard
-    //       if (!seq_guard_.should_accept(event.device_id, event.seq)) {
-    //           Metrics::instance().inc_seq_guard_reject();
-    //           consumer_.commit(*msg);
-    //           continue;
-    //       }
-    //
-    //       // 5. State write
-    //       bool accepted = state_writer_.write(event);
-    //       if (!accepted) {
-    //           Metrics::instance().inc_truly_stale();
-    //           consumer_.commit(*msg);
-    //           continue;
-    //       }
-    //       Metrics::instance().inc_events_accepted();
-    //
-    //       // 6. Buffer for history
-    //       history_writer_.buffer(event);
-    //       if (history_writer_.should_flush()) {
-    //           history_writer_.flush();
-    //           flush_timer = steady_clock::now();
-    //       }
-    //
-    //       // 7. TODO: Notify geofence engine
-    //
-    //       // 8. Commit offset
-    //       consumer_.commit(*msg);
-    //   }
-    //
-    //   // Drain: flush remaining history on shutdown
-    //   history_writer_.flush();
+    auto last_flush = std::chrono::steady_clock::now();
 
-    (void)should_stop; // suppress unused warning
+    while (!should_stop.load()) {
+        auto msg = consumer_.poll(10);
+        if (!msg) {
+            const auto elapsed = std::chrono::steady_clock::now() - last_flush;
+            const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+            if (history_writer_.buffer_size() > 0 &&
+                elapsed_ms >= config_.history_flush_interval_ms) {
+                history_writer_.flush();
+                last_flush = std::chrono::steady_clock::now();
+            }
+            continue;
+        }
+
+        auto event = parse_location_payload(msg->payload);
+        if (!event || event->device_id.empty()) {
+            consumer_.commit(*msg);
+            continue;
+        }
+
+        if (dedup_.is_duplicate(event->device_id, event->seq)) {
+            Metrics::instance().inc_dedup_hit();
+            consumer_.commit(*msg);
+            continue;
+        }
+        dedup_.mark_seen(event->device_id, event->seq);
+
+        if (!seq_guard_.should_accept(event->device_id, event->seq)) {
+            Metrics::instance().inc_seq_guard_reject();
+            consumer_.commit(*msg);
+            continue;
+        }
+
+        if (!state_writer_.write(*event)) {
+            Metrics::instance().inc_truly_stale();
+            consumer_.commit(*msg);
+            continue;
+        }
+
+        Metrics::instance().inc_events_accepted();
+        history_writer_.buffer(*event);
+        if (history_writer_.should_flush()) {
+            history_writer_.flush();
+            last_flush = std::chrono::steady_clock::now();
+        }
+
+        consumer_.commit(*msg);
+    }
+
+    history_writer_.flush();
 }
 
 } // namespace signalroute
