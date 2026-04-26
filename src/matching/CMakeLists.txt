@@ -6,4 +6,4 @@ add_library(sr_matching STATIC
     reservation_manager.cpp
 )
 target_include_directories(sr_matching PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(sr_matching PUBLIC sr_common)
+target_link_libraries(sr_matching PUBLIC sr_common sr_query)

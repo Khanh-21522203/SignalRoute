@@ -139,6 +139,10 @@ add_executable(test_matching_service unit/test_matching_service.cpp)
 target_link_libraries(test_matching_service PRIVATE sr_matching)
 add_test(NAME test_matching_service COMMAND test_matching_service)
 
+add_executable(test_matching_service_lifecycle unit/test_matching_service_lifecycle.cpp)
+target_link_libraries(test_matching_service_lifecycle PRIVATE sr_matching)
+add_test(NAME test_matching_service_lifecycle COMMAND test_matching_service_lifecycle)
+
 add_executable(test_location_state_query unit/test_location_state_query.cpp)
 target_link_libraries(test_location_state_query PRIVATE sr_common sr_processor sr_query)
 add_test(NAME test_location_state_query COMMAND test_location_state_query)

@@ -2,12 +2,19 @@
 
 #include "match_context.h"
 #include "nearest_strategy.h"
+#include "reservation_manager.h"
 #include "strategy_interface.h"
 #include "strategy_registry.h"
+#include "../common/clients/redis_client.h"
+#include "../common/events/all_events.h"
+#include "../common/events/event_bus.h"
+#include "../common/spatial/h3_index.h"
+#include "../query/nearby_handler.h"
 
 #include <algorithm>
 #include <chrono>
 #include <iostream>
+#include <cmath>
 #include <stdexcept>
 #include <unordered_set>
 #include <utility>
@@ -93,17 +100,99 @@ MatchResult failed_result(const MatchRequest& request, std::string reason) {
     return result;
 }
 
+std::vector<MatchCandidate> to_candidates(const NearbyResult& nearby) {
+    std::vector<MatchCandidate> candidates;
+    candidates.reserve(nearby.devices.size());
+    for (const auto& [state, distance] : nearby.devices) {
+        MatchCandidate candidate;
+        candidate.agent_id = state.device_id;
+        candidate.lat = state.lat;
+        candidate.lon = state.lon;
+        candidate.distance_m = distance;
+        candidate.available = true;
+        candidates.push_back(candidate);
+    }
+    return candidates;
+}
+
+class ServiceMatchContext final : public MatchContext {
+public:
+    ServiceMatchContext(const MatchRequest& request,
+                        ReservationManager& reservations,
+                        NearbyHandler& nearby_handler,
+                        int64_t /*started_ms*/)
+        : request_(request)
+        , reservations_(reservations)
+        , nearby_handler_(nearby_handler)
+    {}
+
+    bool reserve(const std::string& agent_id) override {
+        return reservations_.reserve(agent_id, request_.request_id);
+    }
+
+    void release(const std::string& agent_id) override {
+        reservations_.release(agent_id, request_.request_id);
+    }
+
+    std::vector<MatchCandidate> nearby(double lat, double lon, double radius_m, int limit) override {
+        return to_candidates(nearby_handler_.handle(lat, lon, radius_m, limit, 0));
+    }
+
+    int64_t time_remaining_ms() const override {
+        if (request_.deadline_ms <= 0) {
+            return config_default_remaining_ms_;
+        }
+        const int64_t remaining = request_.deadline_ms - epoch_now_ms();
+        return remaining > 0 ? remaining : 0;
+    }
+
+    const std::string& request_id() const override {
+        return request_.request_id;
+    }
+
+private:
+    const MatchRequest& request_;
+    ReservationManager& reservations_;
+    NearbyHandler& nearby_handler_;
+    static constexpr int64_t config_default_remaining_ms_ = 60000;
+};
+
 } // namespace
 
 MatchingService::MatchingService() = default;
 MatchingService::~MatchingService() { if (running_) stop(); }
 
 void MatchingService::start(const Config& config) {
+    start_with_bus(config, nullptr);
+}
+
+void MatchingService::start(const Config& config, EventBus& event_bus) {
+    start_with_bus(config, &event_bus);
+}
+
+void MatchingService::start_with_bus(const Config& config, EventBus* external_bus) {
+    if (running_) {
+        return;
+    }
+
     std::cout << "[MatchingService] Starting...\n";
+    config_ = config;
+    if (external_bus == nullptr) {
+        owned_bus_ = std::make_unique<EventBus>();
+        event_bus_ = owned_bus_.get();
+    } else {
+        owned_bus_.reset();
+        event_bus_ = external_bus;
+    }
+
     register_builtin_strategies();
     strategy_ = StrategyRegistry::instance().create(config.matching.strategy_name);
     strategy_->initialize(config);
     strategy_name_ = config.matching.strategy_name;
+    redis_ = std::make_unique<RedisClient>(config.redis);
+    h3_ = std::make_unique<H3Index>(config.spatial.h3_resolution);
+    nearby_handler_ = std::make_unique<NearbyHandler>(*redis_, *h3_, config.spatial);
+    reservations_ = std::make_unique<ReservationManager>(*redis_, config.matching.request_ttl_ms);
     running_ = true;
     // Kafka/protobuf request consumption and result publication are integrated later.
     std::cout << "[MatchingService] Started.\n";
@@ -112,6 +201,10 @@ void MatchingService::start(const Config& config) {
 void MatchingService::stop() {
     std::cout << "[MatchingService] Stopping...\n";
     running_ = false;
+    reservations_.reset();
+    nearby_handler_.reset();
+    h3_.reset();
+    redis_.reset();
     strategy_.reset();
     std::cout << "[MatchingService] Stopped.\n";
 }
@@ -170,6 +263,104 @@ MatchResult MatchingService::match_once(const MatchRequest& request,
         tracking.release_all();
         return failed_result(request, "matching strategy failed");
     }
+}
+
+MatchResult MatchingService::handle_request(MatchRequest request) {
+    const int64_t started_ms = epoch_now_ms();
+    if (!running_ || !nearby_handler_ || !reservations_) {
+        return failed_result(request, "matching service is not running");
+    }
+    if (request.strategy.empty()) {
+        request.strategy = strategy_name_;
+    }
+    if (request.deadline_ms == 0 && config_.matching.request_ttl_ms > 0) {
+        request.deadline_ms = started_ms + config_.matching.request_ttl_ms;
+    }
+    if (request.max_agents <= 0) {
+        request.max_agents = 1;
+    }
+
+    if (event_bus_) {
+        event_bus_->publish(events::MatchRequestReceived{
+            request.request_id,
+            request.requester_id,
+            request.lat,
+            request.lon,
+            request.radius_m,
+            request.max_agents,
+            request.deadline_ms,
+            request.strategy});
+    }
+
+    if (request.deadline_ms > 0 && started_ms >= request.deadline_ms) {
+        MatchResult result;
+        result.request_id = request.request_id;
+        result.status = MatchStatus::EXPIRED;
+        result.reason = "request deadline expired";
+        if (event_bus_) {
+            event_bus_->publish(events::MatchExpired{request.request_id});
+        }
+        return result;
+    }
+
+    if (request.request_id.empty() || !std::isfinite(request.lat) || !std::isfinite(request.lon) ||
+        !std::isfinite(request.radius_m) || request.radius_m <= 0.0) {
+        auto result = failed_result(request, "invalid match request");
+        if (event_bus_) {
+            event_bus_->publish(events::MatchFailed{request.request_id, result.reason});
+        }
+        return result;
+    }
+
+    auto candidates = to_candidates(
+        nearby_handler_->handle(
+            request.lat,
+            request.lon,
+            request.radius_m,
+            request.max_agents * 4,
+            0));
+
+    ServiceMatchContext context(request, *reservations_, *nearby_handler_, started_ms);
+    auto result = match_once(request, candidates, context);
+    result.latency_ms = epoch_now_ms() - started_ms;
+
+    if (event_bus_) {
+        if (result.status == MatchStatus::MATCHED) {
+            event_bus_->publish(events::MatchCompleted{
+                result.request_id,
+                result.assigned_agent_ids,
+                result.latency_ms});
+        } else if (result.status == MatchStatus::EXPIRED) {
+            event_bus_->publish(events::MatchExpired{result.request_id});
+        } else {
+            event_bus_->publish(events::MatchFailed{result.request_id, result.reason});
+        }
+    }
+
+    return result;
+}
+
+bool MatchingService::seed_agent_for_test(DeviceState state) {
+    if (!running_ || !redis_ || !h3_) {
+        return false;
+    }
+    if (state.device_id.empty()) {
+        return false;
+    }
+    if (state.h3_cell == 0) {
+        state.h3_cell = h3_->lat_lng_to_cell(state.lat, state.lon);
+    }
+    return redis_->update_device_state_cas(state.device_id, state, config_.redis.device_ttl_s);
+}
+
+bool MatchingService::reserve_agent_for_test(
+    const std::string& agent_id,
+    const std::string& request_id) {
+    return reservations_ && reservations_->reserve(agent_id, request_id);
+}
+
+bool MatchingService::is_agent_reserved_for_test(const std::string& agent_id) const {
+    return reservations_ && reservations_->is_reserved(agent_id);
 }
 
 } // namespace signalroute
