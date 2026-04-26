@@ -26,6 +26,14 @@ add_executable(test_event_bus unit/test_event_bus.cpp)
 target_link_libraries(test_event_bus PRIVATE sr_common)
 add_test(NAME test_event_bus COMMAND test_event_bus)
 
+add_executable(test_metrics unit/test_metrics.cpp)
+target_link_libraries(test_metrics PRIVATE sr_common)
+add_test(NAME test_metrics COMMAND test_metrics)
+
+add_executable(test_metrics_event_handlers unit/test_metrics_event_handlers.cpp)
+target_link_libraries(test_metrics_event_handlers PRIVATE sr_common)
+add_test(NAME test_metrics_event_handlers COMMAND test_metrics_event_handlers)
+
 add_executable(test_composition_root unit/test_composition_root.cpp)
 target_link_libraries(test_composition_root PRIVATE sr_common)
 add_test(NAME test_composition_root COMMAND test_composition_root)

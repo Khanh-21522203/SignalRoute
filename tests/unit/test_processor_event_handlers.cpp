@@ -101,7 +101,7 @@ void test_location_accepted_flows_to_state_history_and_geofence_request() {
     assert(geofence_request.old_h3_cell == 0);
     assert(geofence_request.new_h3_cell == state->h3_cell);
     assert(harness.processor_handlers.subscription_count() == 2);
-    assert(harness.metrics_handlers.subscription_count() == 7);
+    assert(harness.metrics_handlers.subscription_count() == 14);
 }
 
 void test_stale_state_write_publishes_rejection_and_skips_history_when_requested_directly() {

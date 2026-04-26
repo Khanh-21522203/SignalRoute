@@ -12,6 +12,8 @@
 
 #include <string>
 #include <cstdint>
+#include <mutex>
+#include <unordered_map>
 
 namespace signalroute {
 
@@ -67,8 +69,31 @@ public:
     /// Export all metrics as Prometheus text format.
     std::string export_text() const;
 
+    /// Fallback/test inspection helpers. Prometheus integration replaces export internals later.
+    void reset_for_test();
+    int64_t counter_value(const std::string& name) const;
+    int64_t counter_value(const std::string& name, const std::string& label) const;
+    double gauge_value(const std::string& name) const;
+    int64_t observation_count(const std::string& name) const;
+    double observation_sum(const std::string& name) const;
+
 private:
     Metrics() = default;
+
+    void inc_counter(const std::string& name, int64_t count = 1);
+    void inc_labeled_counter(const std::string& name, const std::string& label, int64_t count = 1);
+    void set_gauge(const std::string& name, double value);
+    void observe_value(const std::string& name, double value);
+
+    mutable std::mutex mu_;
+    std::unordered_map<std::string, int64_t> counters_;
+    std::unordered_map<std::string, double> gauges_;
+
+    struct Observation {
+        int64_t count = 0;
+        double sum = 0.0;
+    };
+    std::unordered_map<std::string, Observation> observations_;
 
     // TODO: Add prometheus-cpp registry, counter, gauge, histogram members
     // prometheus::Registry registry_;

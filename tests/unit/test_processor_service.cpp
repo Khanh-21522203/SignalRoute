@@ -71,7 +71,7 @@ void test_processor_service_wires_event_driven_runtime() {
     service.start(config, bus);
     assert(service.is_healthy());
     assert(service.is_event_driven());
-    assert(service.subscription_count() == 11);
+    assert(service.subscription_count() == 18);
 
     producer.produce(topic, "dev-1", payload("dev-1", 1, 1000, 10.8231, 106.6297));
 
@@ -94,7 +94,7 @@ void test_processor_service_owned_bus_startup_and_shutdown() {
     service.start(config);
     assert(service.is_healthy());
     assert(service.is_event_driven());
-    assert(service.subscription_count() == 11);
+    assert(service.subscription_count() == 18);
 
     service.stop();
     assert(!service.is_healthy());
