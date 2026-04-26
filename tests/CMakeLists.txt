@@ -75,6 +75,10 @@ add_executable(test_trip_handler unit/test_trip_handler.cpp)
 target_link_libraries(test_trip_handler PRIVATE sr_query)
 add_test(NAME test_trip_handler COMMAND test_trip_handler)
 
+add_executable(test_geofence_evaluator unit/test_geofence_evaluator.cpp)
+target_link_libraries(test_geofence_evaluator PRIVATE sr_geofence)
+add_test(NAME test_geofence_evaluator COMMAND test_geofence_evaluator)
+
 add_executable(test_location_state_query unit/test_location_state_query.cpp)
 target_link_libraries(test_location_state_query PRIVATE sr_common sr_processor sr_query)
 add_test(NAME test_location_state_query COMMAND test_location_state_query)

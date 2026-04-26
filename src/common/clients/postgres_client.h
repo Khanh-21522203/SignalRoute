@@ -95,6 +95,7 @@ public:
     // is wired in.
     size_t trip_point_count() const;
     size_t geofence_event_count() const;
+    std::vector<GeofenceEventRecord> geofence_events() const;
     void set_active_fences(std::vector<GeofenceRule> fences);
 
 private:

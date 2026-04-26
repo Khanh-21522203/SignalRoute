@@ -19,7 +19,8 @@ namespace signalroute {
 class Evaluator {
 public:
     Evaluator(FenceRegistry& registry, RedisClient& redis,
-              KafkaProducer& event_producer, PostgresClient& pg);
+              KafkaProducer& event_producer, PostgresClient& pg,
+              std::string event_topic = "tm.geofence.events");
 
     /**
      * Evaluate a device's movement against all candidate fences.
@@ -55,6 +56,7 @@ private:
     RedisClient& redis_;
     KafkaProducer& event_producer_;
     PostgresClient& pg_;
+    std::string event_topic_;
 };
 
 } // namespace signalroute

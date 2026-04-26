@@ -2,44 +2,95 @@
 #include "point_in_polygon.h"
 #include "../common/metrics/metrics.h"
 
+#include <sstream>
+#include <unordered_map>
+#include <utility>
+
 namespace signalroute {
+namespace {
+
+std::string serialize_geofence_event(const GeofenceEventRecord& event) {
+    std::ostringstream out;
+    out << event.device_id << ','
+        << event.fence_id << ','
+        << geofence_event_type_to_string(event.event_type) << ','
+        << event.event_ts_ms << ','
+        << event.lat << ','
+        << event.lon;
+    return out.str();
+}
+
+GeofenceEventRecord make_event_record(const std::string& device_id,
+                                      const GeofenceRule& fence,
+                                      GeofenceEventType event_type,
+                                      double lat,
+                                      double lon,
+                                      int64_t timestamp_ms) {
+    GeofenceEventRecord record;
+    record.device_id = device_id;
+    record.fence_id = fence.fence_id;
+    record.fence_name = fence.name;
+    record.event_type = event_type;
+    record.lat = lat;
+    record.lon = lon;
+    record.event_ts_ms = timestamp_ms;
+    return record;
+}
+
+} // namespace
 
 Evaluator::Evaluator(FenceRegistry& registry, RedisClient& redis,
-                     KafkaProducer& event_producer, PostgresClient& pg)
-    : registry_(registry), redis_(redis),
-      event_producer_(event_producer), pg_(pg) {}
+                     KafkaProducer& event_producer, PostgresClient& pg,
+                     std::string event_topic)
+    : registry_(registry)
+    , redis_(redis)
+    , event_producer_(event_producer)
+    , pg_(pg)
+    , event_topic_(std::move(event_topic))
+{}
 
-void Evaluator::evaluate(const std::string& /*device_id*/,
-                          int64_t /*old_h3*/, int64_t /*new_h3*/,
-                          double /*lat*/, double /*lon*/, int64_t /*timestamp_ms*/) {
-    // TODO: Implement the full evaluation pipeline
-    //
-    //   auto candidates = registry_.get_candidates(new_h3);
-    //   if (old_h3 != new_h3 && old_h3 != 0) {
-    //       auto old_candidates = registry_.get_candidates(old_h3);
-    //       // Merge: may have exited fences only covered by old cell
-    //       candidates.insert(candidates.end(), old_candidates.begin(), old_candidates.end());
-    //       // Deduplicate
-    //   }
-    //
-    //   for (const auto* fence : candidates) {
-    //       bool inside = geo::point_in_polygon(lat, lon, fence->polygon_vertices);
-    //       auto current_state = redis_.get_fence_state(device_id, fence->fence_id);
-    //       FenceState prev = current_state.value_or(FenceState::OUTSIDE);
-    //
-    //       if (inside && prev == FenceState::OUTSIDE) {
-    //           // ENTER transition
-    //           redis_.set_fence_state(device_id, fence->fence_id, FenceState::INSIDE, timestamp_ms);
-    //           // Emit ENTER event to Kafka
-    //           Metrics::instance().inc_geofence_event("ENTER");
-    //       } else if (!inside && (prev == FenceState::INSIDE || prev == FenceState::DWELL)) {
-    //           // EXIT transition
-    //           redis_.set_fence_state(device_id, fence->fence_id, FenceState::OUTSIDE, timestamp_ms);
-    //           // Emit EXIT event to Kafka
-    //           Metrics::instance().inc_geofence_event("EXIT");
-    //       }
-    //       // DWELL transitions handled by DwellChecker background worker
-    //   }
+void Evaluator::evaluate(const std::string& device_id,
+                          int64_t old_h3, int64_t new_h3,
+                          double lat, double lon, int64_t timestamp_ms) {
+    if (device_id.empty()) {
+        return;
+    }
+
+    std::unordered_map<std::string, const GeofenceRule*> candidates;
+    for (const auto* fence : registry_.get_candidates(new_h3)) {
+        if (fence && fence->active) {
+            candidates[fence->fence_id] = fence;
+        }
+    }
+    if (old_h3 != 0 && old_h3 != new_h3) {
+        for (const auto* fence : registry_.get_candidates(old_h3)) {
+            if (fence && fence->active) {
+                candidates[fence->fence_id] = fence;
+            }
+        }
+    }
+
+    for (const auto& [_, fence] : candidates) {
+        const bool inside = geo::point_in_polygon(lat, lon, fence->polygon_vertices);
+        const FenceState previous =
+            redis_.get_fence_state(device_id, fence->fence_id).value_or(FenceState::OUTSIDE);
+
+        if (inside && previous == FenceState::OUTSIDE) {
+            redis_.set_fence_state(device_id, fence->fence_id, FenceState::INSIDE, timestamp_ms);
+            auto record = make_event_record(
+                device_id, *fence, GeofenceEventType::ENTER, lat, lon, timestamp_ms);
+            pg_.insert_geofence_event(record);
+            event_producer_.produce(event_topic_, device_id, serialize_geofence_event(record));
+            Metrics::instance().inc_geofence_event("ENTER");
+        } else if (!inside && (previous == FenceState::INSIDE || previous == FenceState::DWELL)) {
+            redis_.set_fence_state(device_id, fence->fence_id, FenceState::OUTSIDE, timestamp_ms);
+            auto record = make_event_record(
+                device_id, *fence, GeofenceEventType::EXIT, lat, lon, timestamp_ms);
+            pg_.insert_geofence_event(record);
+            event_producer_.produce(event_topic_, device_id, serialize_geofence_event(record));
+            Metrics::instance().inc_geofence_event("EXIT");
+        }
+    }
 }
 
 } // namespace signalroute

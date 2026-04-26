@@ -141,6 +141,11 @@ size_t PostgresClient::geofence_event_count() const {
     return geofence_events_.size();
 }
 
+std::vector<GeofenceEventRecord> PostgresClient::geofence_events() const {
+    std::lock_guard lock(mu_);
+    return geofence_events_;
+}
+
 void PostgresClient::set_active_fences(std::vector<GeofenceRule> fences) {
     std::lock_guard lock(mu_);
     active_fences_ = std::move(fences);
