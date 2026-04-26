@@ -18,6 +18,11 @@ add_executable(test_composition_root unit/test_composition_root.cpp)
 target_link_libraries(test_composition_root PRIVATE sr_common)
 add_test(NAME test_composition_root COMMAND test_composition_root)
 
+add_executable(test_config_loader unit/test_config_loader.cpp)
+target_link_libraries(test_config_loader PRIVATE sr_common)
+target_compile_definitions(test_config_loader PRIVATE SIGNALROUTE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME test_config_loader COMMAND test_config_loader)
+
 add_executable(test_dedup_window unit/test_dedup_window.cpp)
 target_link_libraries(test_dedup_window PRIVATE sr_processor)
 add_test(NAME test_dedup_window COMMAND test_dedup_window)

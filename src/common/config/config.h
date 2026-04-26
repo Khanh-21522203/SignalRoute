@@ -6,7 +6,9 @@
  * Loads the TOML configuration file and provides typed access to all
  * configuration sections. Each struct maps to a [section] in the TOML file.
  *
- * Dependencies: toml++ (or toml11)
+ * Dependencies: none. Config::load supports the TOML subset used by
+ * config/signalroute.toml: sections, scalar string/bool/int/double values,
+ * comments, and default fallback for omitted keys.
  *
  * Usage:
  *   auto config = signalroute::Config::load("config/signalroute.toml");
@@ -124,10 +126,8 @@ public:
      * @return Populated Config instance.
      * @throws std::runtime_error if the file cannot be read or parsed.
      *
-     * TODO: Implement TOML parsing using toml++ library.
-     *       Each [section] in the TOML file maps to a member struct.
-     *       Missing keys should fall back to the default values defined
-     *       in each struct above.
+     * Each [section] in the TOML file maps to a member struct.
+     * Missing keys fall back to the default values defined in each struct.
      */
     static Config load(const std::string& path);
 
