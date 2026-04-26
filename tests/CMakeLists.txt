@@ -14,6 +14,14 @@ add_executable(test_validator unit/test_validator.cpp)
 target_link_libraries(test_validator PRIVATE sr_gateway)
 add_test(NAME test_validator COMMAND test_validator)
 
+add_executable(test_rate_limiter unit/test_rate_limiter.cpp)
+target_link_libraries(test_rate_limiter PRIVATE sr_gateway)
+add_test(NAME test_rate_limiter COMMAND test_rate_limiter)
+
+add_executable(test_gateway_service unit/test_gateway_service.cpp)
+target_link_libraries(test_gateway_service PRIVATE sr_gateway)
+add_test(NAME test_gateway_service COMMAND test_gateway_service)
+
 add_executable(test_event_bus unit/test_event_bus.cpp)
 target_link_libraries(test_event_bus PRIVATE sr_common)
 add_test(NAME test_event_bus COMMAND test_event_bus)

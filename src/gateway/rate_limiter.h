@@ -14,6 +14,9 @@
 
 #include <string>
 #include <cstdint>
+#include <chrono>
+#include <mutex>
+#include <unordered_map>
 
 namespace signalroute {
 
@@ -49,11 +52,14 @@ public:
     size_t tracked_devices() const;
 
 private:
-    int max_rps_;
+    struct Window {
+        std::chrono::steady_clock::time_point started_at;
+        int count = 0;
+    };
 
-    // TODO: Add concurrent hash map for per-device state
-    // e.g., tbb::concurrent_hash_map<std::string, WindowState>
-    // or std::unordered_map with sharded mutexes
+    int max_rps_;
+    mutable std::mutex mu_;
+    std::unordered_map<std::string, Window> windows_;
 };
 
 } // namespace signalroute

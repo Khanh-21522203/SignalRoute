@@ -17,7 +17,7 @@ This plan turns the current skeleton into a finished backend system. It is organ
 
 ### Known Boundaries
 - Kafka, Redis, PostGIS, gRPC, real H3, Prometheus, and protobuf generation are not integrated.
-- Processor loop currently uses an internal CSV payload fallback for skeleton tests only; real Kafka payload serialization/deserialization must be protobuf-backed in Milestone 6.
+- Gateway and processor currently use an internal CSV payload fallback for skeleton tests only; real Kafka payload serialization/deserialization must be protobuf-backed in Milestone 6.
 - Gateway does not expose real gRPC/UDP endpoints yet.
 - Query service does not expose real gRPC/HTTP endpoints yet.
 - Event bus exists as a framework skeleton; most services still need to publish/subscribe through composition-root wiring.
@@ -28,7 +28,7 @@ This plan turns the current skeleton into a finished backend system. It is organ
 - Keep external infrastructure behind interfaces so unit tests can run without Kafka/Redis/PostGIS.
 - Add integration tests separately from unit tests, grouped by feature: ingestion pipeline, state persistence, trip history, nearby query, geofence events, matching reservation.
 - Do not replace a working in-memory contract until the real adapter has equivalent tests.
-- Any fallback payload format, including the processor loop CSV format, is temporary test scaffolding and must not become the production Kafka wire contract.
+- Any fallback payload format, including gateway/processor CSV, is temporary test scaffolding and must not become the production Kafka wire contract.
 - Every milestone must end with build, unit tests, relevant integration tests, and updated docs.
 
 ## In-Process Event Framework Architecture
@@ -219,7 +219,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 - **Ownership:** `src/processor/processing_loop.*`, processor tests.
 - **Goal:** Complete Kafka-to-state/history processing.
 - **Items:** deserialize, dedup, sequence guard, publish internal events, commit offsets, DLQ behavior.
-- **Current skeleton note:** `ProcessingLoop` may use the internal CSV fallback only for unit-test scaffolding until G2 protobuf conversion lands. Do not extend CSV as a durable or public Kafka payload format.
+- **Current skeleton note:** `GatewayService` and `ProcessingLoop` may use the internal CSV fallback only for unit-test scaffolding until G2 protobuf conversion lands. Do not extend CSV as a durable or public Kafka payload format.
 - **Depends on:** A1/A2, E2, F2, G1/G2.
 - **Verification:** processor loop integration tests.
 
@@ -454,7 +454,7 @@ Implement trip persistence, trip replay, spatial history filters, geofence rule 
 ### Goal
 Implement durable messaging and generated protobuf contracts.
 
-The internal CSV processor payload fallback exists only to test the skeleton processor loop before protobuf generation is wired. This milestone must replace that fallback at the Kafka boundary with protobuf serialization/deserialization and keep domain code independent of generated protobuf types.
+The internal CSV gateway/processor payload fallback exists only to test the skeleton ingestion and processor loops before protobuf generation is wired. This milestone must replace that fallback at the Kafka boundary with protobuf serialization/deserialization and keep domain code independent of generated protobuf types.
 
 ### Work Items
 - Enable protobuf and gRPC generation in CMake.

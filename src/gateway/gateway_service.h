@@ -21,13 +21,29 @@
  */
 
 #include "../common/config/config.h"
+#include "../common/types/location_event.h"
+#include "../common/types/result.h"
 #include <memory>
 #include <atomic>
+#include <cstddef>
+#include <string>
+#include <vector>
 
 namespace signalroute {
 
 // Forward declarations
+class EventBus;
 class KafkaProducer;
+class RateLimiter;
+class Validator;
+
+struct IngestResult {
+    int accepted = 0;
+    int rejected = 0;
+    std::vector<std::string> errors;
+
+    [[nodiscard]] bool ok() const { return rejected == 0; }
+};
 
 class GatewayService {
 public:
@@ -46,6 +62,7 @@ public:
      *   5. Start UDP listener on config.server.udp_port
      */
     void start(const Config& config);
+    void start(const Config& config, EventBus& event_bus);
 
     /**
      * Graceful shutdown.
@@ -61,16 +78,23 @@ public:
 
     /// Health check.
     bool is_healthy() const;
+    bool is_event_driven() const;
+
+    Result<LocationEvent, std::string> ingest_one(LocationEvent event);
+    IngestResult ingest_batch(const std::vector<LocationEvent>& batch);
+
+    std::size_t tracked_devices_for_test() const;
 
 private:
-    std::atomic<bool> running_{false};
+    void start_with_bus(const Config& config, EventBus* external_bus);
 
-    // TODO: Add member variables
-    // std::unique_ptr<KafkaProducer> producer_;
-    // std::unique_ptr<Validator> validator_;
-    // std::unique_ptr<RateLimiter> rate_limiter_;
-    // std::unique_ptr<GrpcServer> grpc_server_;
-    // std::unique_ptr<UdpServer> udp_server_;
+    std::atomic<bool> running_{false};
+    Config config_;
+    std::unique_ptr<EventBus> owned_bus_;
+    EventBus* event_bus_ = nullptr;
+    std::unique_ptr<KafkaProducer> producer_;
+    std::unique_ptr<Validator> validator_;
+    std::unique_ptr<RateLimiter> rate_limiter_;
 };
 
 } // namespace signalroute

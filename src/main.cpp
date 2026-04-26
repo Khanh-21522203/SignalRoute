@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
         }
 
         if (wants_gateway) {
-            gateway.start(config);
+            gateway.start(config, event_bus);
         }
 
         std::cout << "[SignalRoute] Role '" << role << "' started. Press Ctrl+C to stop.\n";
