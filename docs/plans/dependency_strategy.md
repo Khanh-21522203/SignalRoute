@@ -62,9 +62,9 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 - keep generated protobuf includes out of domain headers. Generated types belong at API/transport boundaries.
 
 ## Recommended Implementation Order
-1. Integrate protobuf payload encoding/decoding into gateway, processor, geofence, matching, and DLQ runtime boundaries while keeping CSV fallback available for tests.
+1. Integrate protobuf payload encoding/decoding into geofence, matching, and DLQ runtime boundaries while keeping fallback payloads available for tests.
 2. Enable gRPC service stub generation once `gRPC::grpc++` and `gRPC::grpc_cpp_plugin` are available.
-3. Replace runtime CSV fallback parsing only after protobuf processor/gateway integration tests pass.
+3. Replace runtime CSV fallback parsing only after all protobuf runtime integration tests pass.
 4. Replace the deterministic H3 fallback behind `H3Index`.
 5. Add Redis integration behind `RedisClient`.
 6. Add PostGIS integration behind `PostgresClient`.
@@ -79,9 +79,10 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | Fallback default | `cmake -S . -B /tmp/signalroute-build -DSR_BUILD_TESTS=ON` | Configure succeeds without external packages |
 | Protobuf generated messages | `cmake -S . -B /tmp/signalroute-protobuf-build -DSR_BUILD_TESTS=ON -DSR_ENABLE_PROTOBUF=ON` | Configure/build succeeds when protobuf is available and runs generated protobuf round-trip tests |
 | Protobuf Kafka payloads | `ctest --test-dir /tmp/signalroute-protobuf-build --output-on-failure` | Runs generated adapter and Kafka fallback protobuf payload round-trip tests |
+| Gateway/processor protobuf runtime | Same protobuf CTest command | Runs `test_gateway_processor_protobuf_runtime`, proving gateway protobuf output is accepted by processor runtime |
 | gRPC missing | `cmake -S . -B /tmp/signalroute-grpc-missing -DSR_ENABLE_PROTOBUF=ON -DSR_ENABLE_GRPC=ON` | Configure fails clearly if gRPC package is unavailable |
 | Production dependency missing | `cmake -S . -B /tmp/signalroute-h3 -DSR_ENABLE_REAL_H3=ON` | Configure fails at package discovery with a clear missing package error |
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
 
 ## Current Boundary
-Batch 20 adds generated protobuf domain adapters and Kafka fallback payload round-trip tests. It does not yet switch gateway, processor, geofence, matching, or DLQ runtime code from CSV/fallback payloads to protobuf payloads.
+Batch 21 switches the gateway and processor runtime location payload path to protobuf when `SR_ENABLE_PROTOBUF=ON`, while preserving CSV as the default fallback build format and as a decoder fallback in protobuf builds. Geofence, matching, and DLQ runtime payload paths still need protobuf integration.

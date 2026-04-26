@@ -63,6 +63,10 @@ if(SR_ENABLE_PROTOBUF)
     add_executable(test_kafka_protobuf_payloads unit/test_kafka_protobuf_payloads.cpp)
     target_link_libraries(test_kafka_protobuf_payloads PRIVATE sr_common)
     add_test(NAME test_kafka_protobuf_payloads COMMAND test_kafka_protobuf_payloads)
+
+    add_executable(test_gateway_processor_protobuf_runtime unit/test_gateway_processor_protobuf_runtime.cpp)
+    target_link_libraries(test_gateway_processor_protobuf_runtime PRIVATE sr_gateway sr_processor)
+    add_test(NAME test_gateway_processor_protobuf_runtime COMMAND test_gateway_processor_protobuf_runtime)
 endif()
 
 add_executable(test_redis_client unit/test_redis_client.cpp)

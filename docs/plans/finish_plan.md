@@ -239,7 +239,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task H1: Gateway Service
 - **Ownership:** `src/gateway/`, gateway tests.
-- **Status:** Done fallback for direct ingest methods; protobuf payload adapters exist, but gateway runtime still publishes CSV fallback payloads; gRPC/UDP pending.
+- **Status:** Done fallback for direct ingest methods; gateway runtime emits protobuf location payloads when `SR_ENABLE_PROTOBUF=ON` and CSV in default fallback builds; gRPC/UDP pending.
 - **Goal:** Implement gRPC/UDP ingestion and event publication.
 - **Items:** service handlers, validation, rate limiting, server timestamp, Kafka publish, in-process event publish for standalone mode.
 - **Depends on:** A1/A2, G1/G2.
@@ -247,7 +247,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task I1: Processor Loop
 - **Ownership:** `src/processor/processing_loop.*`, processor tests.
-- **Status:** Done fallback for CSV payload processing and EventBus fan-out; protobuf payload adapters exist, but processor runtime still parses CSV fallback payloads.
+- **Status:** Done fallback and EventBus fan-out; processor runtime decodes protobuf location payloads when `SR_ENABLE_PROTOBUF=ON` and still accepts CSV fallback payloads.
 - **Goal:** Complete Kafka-to-state/history processing.
 - **Items:** deserialize, dedup, sequence guard, publish internal events, commit offsets, DLQ behavior.
 - **Current skeleton note:** `GatewayService` and `ProcessingLoop` may use the internal CSV fallback only for unit-test scaffolding until G2 protobuf conversion lands. Do not extend CSV as a durable or public Kafka payload format.

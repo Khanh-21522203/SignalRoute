@@ -1,6 +1,7 @@
 #include "common/events/all_events.h"
 #include "common/events/event_bus.h"
 #include "common/kafka/kafka_consumer.h"
+#include "common/proto/location_payload_codec.h"
 #include "gateway/gateway_service.h"
 
 #include <cassert>
@@ -70,7 +71,15 @@ void test_ingest_one_validates_stamps_publishes_and_emits_event() {
     const auto msg = consumer.poll(0);
     assert(msg.has_value());
     assert(msg->key == "dev-1");
+#if SIGNALROUTE_HAS_PROTOBUF
+    assert(msg->payload.find(std::string(signalroute::proto_boundary::protobuf_location_payload_prefix())) == 0);
+#else
     assert(msg->payload.find("dev-1,1,") == 0);
+#endif
+    const auto decoded = signalroute::proto_boundary::decode_location_payload(msg->payload);
+    assert(decoded.is_ok());
+    assert(decoded.value().device_id == "dev-1");
+    assert(decoded.value().seq == 1);
 
     gateway.stop();
     assert(!gateway.is_healthy());

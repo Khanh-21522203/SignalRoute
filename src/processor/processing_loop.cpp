@@ -7,50 +7,13 @@
 #include "state_writer.h"
 #include "history_writer.h"
 #include "../common/metrics/metrics.h"
+#include "../common/proto/location_payload_codec.h"
 #include "../common/types/location_event.h"
 
 #include <chrono>
-#include <exception>
-#include <optional>
-#include <sstream>
 #include <string>
-#include <vector>
 
 namespace signalroute {
-namespace {
-
-std::vector<std::string> split_csv(const std::string& payload) {
-    std::vector<std::string> fields;
-    std::stringstream in(payload);
-    std::string field;
-    while (std::getline(in, field, ',')) {
-        fields.push_back(field);
-    }
-    return fields;
-}
-
-std::optional<LocationEvent> parse_location_payload(const std::string& payload) {
-    const auto fields = split_csv(payload);
-    if (fields.size() != 6) {
-        return std::nullopt;
-    }
-
-    try {
-        LocationEvent event;
-        event.device_id = fields[0];
-        event.seq = static_cast<uint64_t>(std::stoull(fields[1]));
-        event.timestamp_ms = std::stoll(fields[2]);
-        event.server_recv_ms = std::stoll(fields[3]);
-        event.lat = std::stod(fields[4]);
-        event.lon = std::stod(fields[5]);
-        return event;
-    } catch (const std::exception&) {
-        return std::nullopt;
-    }
-}
-
-} // namespace
-
 ProcessingLoop::ProcessingLoop(
     KafkaConsumer& consumer,
     DedupWindow& dedup,
@@ -97,28 +60,29 @@ void ProcessingLoop::run(std::atomic<bool>& should_stop) {
             continue;
         }
 
-        auto event = parse_location_payload(msg->payload);
-        if (!event || event->device_id.empty()) {
+        auto decoded = proto_boundary::decode_location_payload(msg->payload);
+        if (decoded.is_err()) {
             consumer_.commit(*msg);
             continue;
         }
+        auto event = decoded.value();
 
-        if (dedup_.is_duplicate(event->device_id, event->seq)) {
+        if (dedup_.is_duplicate(event.device_id, event.seq)) {
             if (event_bus_) {
-                event_bus_->publish(events::LocationDuplicateRejected{*event});
+                event_bus_->publish(events::LocationDuplicateRejected{event});
             } else {
                 Metrics::instance().inc_dedup_hit();
             }
             consumer_.commit(*msg);
             continue;
         }
-        dedup_.mark_seen(event->device_id, event->seq);
+        dedup_.mark_seen(event.device_id, event.seq);
 
-        if (!seq_guard_.should_accept(event->device_id, event->seq)) {
+        if (!seq_guard_.should_accept(event.device_id, event.seq)) {
             if (event_bus_) {
                 event_bus_->publish(events::LocationStaleRejected{
-                    *event,
-                    seq_guard_.current_seq(event->device_id)});
+                    event,
+                    seq_guard_.current_seq(event.device_id)});
             } else {
                 Metrics::instance().inc_seq_guard_reject();
             }
@@ -127,19 +91,19 @@ void ProcessingLoop::run(std::atomic<bool>& should_stop) {
         }
 
         if (event_bus_) {
-            event_bus_->publish(events::LocationAccepted{*event});
+            event_bus_->publish(events::LocationAccepted{event});
             consumer_.commit(*msg);
             continue;
         }
 
-        if (!state_writer_.write(*event)) {
+        if (!state_writer_.write(event)) {
             Metrics::instance().inc_truly_stale();
             consumer_.commit(*msg);
             continue;
         }
 
         Metrics::instance().inc_events_accepted();
-        history_writer_.buffer(*event);
+        history_writer_.buffer(event);
         if (history_writer_.should_flush()) {
             history_writer_.flush();
             last_flush = std::chrono::steady_clock::now();

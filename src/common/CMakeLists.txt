@@ -12,6 +12,7 @@ add_library(sr_common STATIC
     kafka/kafka_producer.cpp
     kafka/kafka_consumer.cpp
     proto/domain_conversions.cpp
+    proto/location_payload_codec.cpp
     composition/composition_root.cpp
     composition/metrics_event_handlers.cpp
 )

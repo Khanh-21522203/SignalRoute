@@ -5,10 +5,10 @@
 #include "../common/events/all_events.h"
 #include "../common/events/event_bus.h"
 #include "../common/kafka/kafka_producer.h"
+#include "../common/proto/location_payload_codec.h"
 
 #include <chrono>
 #include <iostream>
-#include <sstream>
 #include <utility>
 
 namespace signalroute {
@@ -17,17 +17,6 @@ namespace {
 int64_t now_ms() {
     const auto now = std::chrono::system_clock::now().time_since_epoch();
     return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
-}
-
-std::string serialize_location_payload(const LocationEvent& event) {
-    std::ostringstream out;
-    out << event.device_id << ','
-        << event.seq << ','
-        << event.timestamp_ms << ','
-        << event.server_recv_ms << ','
-        << event.lat << ','
-        << event.lon;
-    return out.str();
 }
 
 } // namespace
@@ -119,7 +108,7 @@ Result<LocationEvent, std::string> GatewayService::ingest_one(LocationEvent even
     producer_->produce(
         config_.kafka.ingest_topic,
         event.device_id,
-        serialize_location_payload(event));
+        proto_boundary::encode_location_payload(event));
 
     if (event_bus_) {
         event_bus_->publish(events::IngestEventPublished{event, config_.kafka.ingest_topic});
