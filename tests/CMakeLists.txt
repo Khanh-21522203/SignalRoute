@@ -103,6 +103,10 @@ add_executable(test_latest_handler unit/test_latest_handler.cpp)
 target_link_libraries(test_latest_handler PRIVATE sr_query)
 add_test(NAME test_latest_handler COMMAND test_latest_handler)
 
+add_executable(test_query_service unit/test_query_service.cpp)
+target_link_libraries(test_query_service PRIVATE sr_query)
+add_test(NAME test_query_service COMMAND test_query_service)
+
 add_executable(test_nearby_handler unit/test_nearby_handler.cpp)
 target_link_libraries(test_nearby_handler PRIVATE sr_query sr_processor)
 add_test(NAME test_nearby_handler COMMAND test_nearby_handler)
