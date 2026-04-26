@@ -24,9 +24,12 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Geofence fallback evaluation for enter, exit, old-cell exit, dwell, audit, and event publication.
 - Matching fallback service lifecycle, reservation flow, nearest strategy, deadlines, cleanup, and typed matching events.
 - Worker fallback `run_once` flows for H3 cleanup, DLQ replay, and metrics export.
+- Fallback-first dependency build switches in `cmake/SignalRouteOptions.cmake` and central discovery/linking in `cmake/SignalRouteDependencies.cmake`.
+- Stable `signalroute_proto` target that is an interface target in fallback mode and generated protobuf/gRPC library when `SR_ENABLE_PROTOBUF_GRPC=ON`.
 
 ### Known Boundaries
 - Kafka, Redis, PostGIS, gRPC, real H3, Prometheus, and protobuf generation are not integrated.
+- Production dependency switches exist but real adapter implementations still need to be written behind existing interfaces.
 - Gateway, processor, and DLQ replay currently use an internal CSV payload fallback for skeleton tests only; real Kafka payload serialization/deserialization must be protobuf-backed in Milestone 6.
 - Gateway does not expose real gRPC/UDP endpoints yet.
 - Query service does not expose real gRPC/HTTP endpoints yet.
@@ -165,6 +168,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task C2: Dependency Strategy
 - **Ownership:** root `CMakeLists.txt`, dependency docs, toolchain files if used.
+- **Status:** Done fallback-first CMake switches; package provider/toolchain lock still pending.
 - **Goal:** Choose and implement dependency management.
 - **Items:** H3, protobuf, gRPC, Redis client, Kafka client, Postgres client, Prometheus.
 - **Depends on:** none, but should coordinate before storage/transport work.

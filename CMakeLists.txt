@@ -9,18 +9,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ────────────────────────────────────────────
-# Dependencies (TODO: integrate via vcpkg, Conan, or FetchContent)
+# Build options and dependency discovery
 # ────────────────────────────────────────────
-
-# TODO: find_package(Protobuf REQUIRED)
-# TODO: find_package(gRPC REQUIRED)
-# TODO: find_package(hiredis REQUIRED)       # Redis C client
-# TODO: find_package(redis++ REQUIRED)       # Redis C++ wrapper
-# TODO: find_package(RdKafka REQUIRED)       # librdkafka
-# TODO: find_package(PostgreSQL REQUIRED)    # libpq
-# TODO: find_package(h3 REQUIRED)            # H3 spatial index
-# TODO: find_package(tomlplusplus REQUIRED)  # TOML config parser
-# TODO: find_package(prometheus-cpp REQUIRED) # Metrics
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(SignalRouteOptions)
+include(SignalRouteDependencies)
 
 # ────────────────────────────────────────────
 # Proto generation
@@ -54,13 +47,11 @@ target_link_libraries(signalroute PRIVATE
     sr_geofence
     sr_matching
     sr_workers
-    # signalroute_proto  # TODO: uncomment when proto build is configured
 )
 
 # ────────────────────────────────────────────
 # Tests (optional)
 # ────────────────────────────────────────────
-option(SR_BUILD_TESTS "Build SignalRoute tests" ON)
 if(SR_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)

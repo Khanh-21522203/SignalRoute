@@ -54,6 +54,7 @@ flowchart TB
 |----------|---------------------|
 | [architecture.md](./architecture.md) | **Start here.** Full system overview using the C4 model. Understand service boundaries, all data flows, core invariants, concurrency model, scaling strategy, and configuration. |
 | [components.md](./components.md) | Deep-dive into each individual component. Read this when implementing or debugging a specific subsystem. |
+| [plans/dependency_strategy.md](./plans/dependency_strategy.md) | Build switches and dependency integration order for protobuf/gRPC, Kafka, Redis, PostGIS, H3, Prometheus, and toml++. |
 
 ### Storage
 
