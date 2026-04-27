@@ -24,6 +24,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Geofence fallback evaluation for enter, exit, old-cell exit, dwell, audit, and event publication.
 - Matching fallback service lifecycle, reservation flow, nearest strategy, deadlines, cleanup, typed matching events, and Kafka request/result loop over the shared matching payload codec.
 - Worker fallback `run_once` flows for H3 cleanup, DLQ replay, and metrics export.
+- Dependency-free admin health and metrics service for component health aggregation and Prometheus-text metrics snapshots.
 - Fallback-first dependency build switches in `cmake/SignalRouteOptions.cmake` and central discovery/linking in `cmake/SignalRouteDependencies.cmake`.
 - Stable `signalroute_proto` target that is an interface target in fallback mode, a generated protobuf message library when `SR_ENABLE_PROTOBUF=ON`, and a generated gRPC stub library when `SR_ENABLE_GRPC=ON`.
 - Dependency-free domain-to-wire conversion contracts under `src/common/proto/` for location, query device state, geofence events, and matching request/result payloads.
@@ -36,7 +37,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Gateway has dependency-free transport handler methods but does not expose real gRPC/UDP endpoints yet.
 - Query service has dependency-free transport handler methods but does not expose real gRPC/HTTP endpoints yet.
 - Event bus wiring is implemented for the processor/geofence/metrics fallback path, but cross-role production deployment still needs explicit durable Kafka/protobuf boundaries.
-- Geofence fallback flows and matching Kafka fallback request/result flow are implemented, but production adapters, transport handlers, and admin APIs are still pending.
+- Geofence fallback flows and matching Kafka fallback request/result flow are implemented; production adapters, real endpoint transports, admin gRPC binding, and admin CRUD are still pending.
 
 ## Engineering Rules
 - Keep tests grouped by feature/function: `test_dedup_window`, `test_state_writer`, `test_nearby_handler`, `test_geofence_evaluator`, etc.
@@ -296,7 +297,8 @@ Use this section when running multiple agents. Each task is intentionally scoped
 - **Verification:** worker tests.
 
 ### Agent Task N1: Observability And Admin
-- **Ownership:** `src/common/metrics/`, admin proto/service, observability tests.
+- **Ownership:** `src/common/metrics/`, `src/common/admin/`, admin proto/service, observability tests.
+- **Status:** Dependency-free admin health aggregation and metrics snapshot service added; Prometheus exporter, gRPC binding, and readiness policy pending.
 - **Goal:** Complete metrics, health, readiness, and admin APIs.
 - **Items:** Prometheus exporter, health aggregation, component status events, admin service.
 - **Depends on:** A1/A2, C2.
@@ -731,6 +733,7 @@ Implement background operational jobs and observability.
 - Implement DLQ replay worker.
 - Implement metrics reporter or direct Prometheus exposer.
 - Implement admin health service.
+  - Status: dependency-free health aggregation and metrics snapshot service added; endpoint binding pending.
 - Add structured logging.
 - Add graceful shutdown for all services.
 - Add readiness/liveness semantics.
@@ -747,7 +750,7 @@ Implement background operational jobs and observability.
 - `test_h3_cleanup_worker`
 - `test_dlq_replay_worker`
 - `test_metrics_exporter`
-- `test_admin_health_service`
+- `test_admin_service`
 - `test_graceful_shutdown`
 
 ---

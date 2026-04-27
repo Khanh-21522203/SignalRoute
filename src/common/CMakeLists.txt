@@ -3,6 +3,7 @@
 # by default. The fallback runtime remains dependency-free for unit tests.
 
 add_library(sr_common STATIC
+    admin/admin_service.cpp
     config/config.cpp
     spatial/h3_index.cpp
     spatial/haversine.cpp

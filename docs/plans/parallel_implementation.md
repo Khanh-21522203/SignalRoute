@@ -12,6 +12,7 @@ This file defines the preparation required before running multiple agents or dev
 - Dependency strategy is tracked in `docs/plans/dependency_strategy.md`.
 - Gateway, processor, geofence, matching payload codecs, and DLQ replay use shared codecs. Protobuf payloads are emitted when `SR_ENABLE_PROTOBUF=ON`; CSV remains fallback-build scaffolding and decoder compatibility.
 - Gateway and query now expose dependency-free transport-facing request/response handlers over existing service methods. Real gRPC/UDP/HTTP endpoint binding remains pending.
+- Admin health/metrics now has a dependency-free service boundary for component health aggregation and Prometheus-text metric snapshots. Real gRPC/HTTP endpoint binding remains pending.
 - Metrics currently has deterministic fallback behavior for unit and lifecycle tests. PostGIS keeps deterministic fallback behavior by default and has an optional `SR_ENABLE_REAL_POSTGIS` libpq adapter path pending real-PostGIS verification. Redis keeps deterministic fallback behavior by default and has an optional `SR_ENABLE_REAL_REDIS` redis-plus-plus adapter path pending real-Redis verification. H3 keeps deterministic fallback behavior by default and has an optional `SR_ENABLE_REAL_H3` C API adapter path pending real-H3 verification. Kafka keeps deterministic fallback behavior by default, has an optional `SR_ENABLE_REAL_KAFKA` librdkafka++ adapter path pending broker-backed verification, and drives the matching request/result loop through the shared matching codec.
 - Processor/geofence/metrics observer wiring is implemented for in-process fallback composition.
 - Domain-to-wire conversion contracts live under `src/common/proto/`; generated protobuf code should adapt through that boundary.
@@ -131,4 +132,4 @@ Do not run these at the same time without coordination:
 - CMake dependency strategy and any task adding external dependencies
 
 ## Next Recommended Implementation Task
-Install/provide RdKafka, H3, hiredis/redis++, PostgreSQL/libpq/PostGIS, and gRPC packages to run package-backed adapter and endpoint compile/integration tests. If dependency setup remains deferred, continue with admin/health/metrics handlers and worker hardening over existing service boundaries. Keep CSV fallback decoding until durable Kafka integration tests pass. gRPC service stubs remain gated behind `SR_ENABLE_GRPC`.
+Continue with worker retry/backoff hardening, graceful shutdown, and readiness policy over existing service boundaries. Only run package-backed adapter/endpoint checks after the relevant dependency path changes or after dependencies are installed. Keep CSV fallback decoding until durable Kafka integration tests pass. gRPC service stubs remain gated behind `SR_ENABLE_GRPC`.

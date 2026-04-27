@@ -34,6 +34,10 @@ add_executable(test_metrics_event_handlers unit/test_metrics_event_handlers.cpp)
 target_link_libraries(test_metrics_event_handlers PRIVATE sr_common)
 add_test(NAME test_metrics_event_handlers COMMAND test_metrics_event_handlers)
 
+add_executable(test_admin_service unit/test_admin_service.cpp)
+target_link_libraries(test_admin_service PRIVATE sr_common)
+add_test(NAME test_admin_service COMMAND test_admin_service)
+
 add_executable(test_composition_root unit/test_composition_root.cpp)
 target_link_libraries(test_composition_root PRIVATE sr_common)
 add_test(NAME test_composition_root COMMAND test_composition_root)
