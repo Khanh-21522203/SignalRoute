@@ -8,6 +8,9 @@
 #include "../common/clients/redis_client.h"
 #include "../common/events/all_events.h"
 #include "../common/events/event_bus.h"
+#include "../common/kafka/kafka_consumer.h"
+#include "../common/kafka/kafka_producer.h"
+#include "../common/proto/matching_payload_codec.h"
 #include "../common/spatial/h3_index.h"
 #include "../query/nearby_handler.h"
 
@@ -16,6 +19,7 @@
 #include <iostream>
 #include <cmath>
 #include <stdexcept>
+#include <thread>
 #include <unordered_set>
 #include <utility>
 
@@ -193,14 +197,19 @@ void MatchingService::start_with_bus(const Config& config, EventBus* external_bu
     h3_ = std::make_unique<H3Index>(config.spatial.h3_resolution);
     nearby_handler_ = std::make_unique<NearbyHandler>(*redis_, *h3_, config.spatial);
     reservations_ = std::make_unique<ReservationManager>(*redis_, config.matching.request_ttl_ms);
+    result_producer_ = std::make_unique<KafkaProducer>(config.kafka);
+    request_consumer_ = std::make_unique<KafkaConsumer>(
+        config.kafka,
+        std::vector<std::string>{config.matching.request_topic});
     running_ = true;
-    // Kafka/protobuf request consumption and result publication are integrated later.
     std::cout << "[MatchingService] Started.\n";
 }
 
 void MatchingService::stop() {
     std::cout << "[MatchingService] Stopping...\n";
     running_ = false;
+    request_consumer_.reset();
+    result_producer_.reset();
     reservations_.reset();
     nearby_handler_.reset();
     h3_.reset();
@@ -338,6 +347,54 @@ MatchResult MatchingService::handle_request(MatchRequest request) {
     }
 
     return result;
+}
+
+MatchingLoopResult MatchingService::process_requests_once(int max_messages) {
+    MatchingLoopResult loop_result;
+    if (max_messages <= 0 || !running_ || !request_consumer_ || !result_producer_) {
+        return loop_result;
+    }
+
+    for (int i = 0; i < max_messages; ++i) {
+        auto message = request_consumer_->poll(0);
+        if (!message) {
+            break;
+        }
+
+        auto request = proto_boundary::decode_match_request_payload(message->payload);
+        if (request.is_err()) {
+            ++loop_result.invalid_messages;
+            request_consumer_->commit(*message);
+            continue;
+        }
+
+        auto decoded_request = request.value();
+        auto result = handle_request(decoded_request);
+        try {
+            result_producer_->produce(
+                config_.matching.result_topic,
+                result.request_id,
+                proto_boundary::encode_match_result_payload(
+                    result,
+                    decoded_request.requester_id,
+                    decoded_request.strategy.empty() ? strategy_name_ : decoded_request.strategy));
+            result_producer_->flush(5000);
+            request_consumer_->commit(*message);
+            ++loop_result.processed_requests;
+            ++loop_result.published_results;
+        } catch (const std::exception&) {
+            ++loop_result.failed_messages;
+        }
+    }
+
+    return loop_result;
+}
+
+void MatchingService::run_request_loop(std::atomic<bool>& should_stop) {
+    while (!should_stop.load()) {
+        (void)process_requests_once();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
 }
 
 bool MatchingService::seed_agent_for_test(DeviceState state) {

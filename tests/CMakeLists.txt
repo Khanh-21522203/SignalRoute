@@ -169,6 +169,10 @@ add_executable(test_matching_service_lifecycle unit/test_matching_service_lifecy
 target_link_libraries(test_matching_service_lifecycle PRIVATE sr_matching)
 add_test(NAME test_matching_service_lifecycle COMMAND test_matching_service_lifecycle)
 
+add_executable(test_matching_kafka_loop unit/test_matching_kafka_loop.cpp)
+target_link_libraries(test_matching_kafka_loop PRIVATE sr_matching)
+add_test(NAME test_matching_kafka_loop COMMAND test_matching_kafka_loop)
+
 add_executable(test_h3_cleanup_worker unit/test_h3_cleanup_worker.cpp)
 target_link_libraries(test_h3_cleanup_worker PRIVATE sr_workers)
 add_test(NAME test_h3_cleanup_worker COMMAND test_h3_cleanup_worker)

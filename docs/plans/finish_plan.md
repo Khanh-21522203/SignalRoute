@@ -22,7 +22,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Gateway fallback ingest methods with validation, rate limiting, shared location payload encoding, and typed gateway events.
 - Query fallback service lifecycle for latest, nearby, trip, and spatial trip reads.
 - Geofence fallback evaluation for enter, exit, old-cell exit, dwell, audit, and event publication.
-- Matching fallback service lifecycle, reservation flow, nearest strategy, deadlines, cleanup, and typed matching events.
+- Matching fallback service lifecycle, reservation flow, nearest strategy, deadlines, cleanup, typed matching events, and Kafka request/result loop over the shared matching payload codec.
 - Worker fallback `run_once` flows for H3 cleanup, DLQ replay, and metrics export.
 - Fallback-first dependency build switches in `cmake/SignalRouteOptions.cmake` and central discovery/linking in `cmake/SignalRouteDependencies.cmake`.
 - Stable `signalroute_proto` target that is an interface target in fallback mode, a generated protobuf message library when `SR_ENABLE_PROTOBUF=ON`, and a generated gRPC stub library when `SR_ENABLE_GRPC=ON`.
@@ -36,7 +36,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Gateway does not expose real gRPC/UDP endpoints yet.
 - Query service does not expose real gRPC/HTTP endpoints yet.
 - Event bus wiring is implemented for the processor/geofence/metrics fallback path, but cross-role production deployment still needs explicit durable Kafka/protobuf boundaries.
-- Geofence and matching fallback flows are implemented, but production adapters, transport handlers, and admin APIs are still pending.
+- Geofence fallback flows and matching Kafka fallback request/result flow are implemented, but production adapters, transport handlers, and admin APIs are still pending.
 
 ## Engineering Rules
 - Keep tests grouped by feature/function: `test_dedup_window`, `test_state_writer`, `test_nearby_handler`, `test_geofence_evaluator`, etc.
@@ -280,9 +280,9 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task L1: Matching Framework
 - **Ownership:** `src/matching/`, matching tests.
-- **Status:** Done fallback; matching request/result payload codecs are ready; Kafka loop and integration tests pending.
+- **Status:** Done fallback; matching request/result payload codecs and request/result Kafka loop are ready; broker-backed Kafka integration tests pending.
 - **Goal:** Complete match context, strategy registry usage, reservations, and result flow.
-- **Items:** built-in nearest strategy, request deadline, reservation cleanup, result publishing, events.
+- **Items:** built-in nearest strategy, request deadline, reservation cleanup, result publishing, events, request-topic polling, result-topic publishing.
 - **Depends on:** A1/A2, D2, E1, G1/G2.
 - **Verification:** matching unit/integration tests.
 
@@ -509,7 +509,7 @@ Shared payload codecs now cover location, geofence events, matching request/resu
   - lag reporting (fallback done; librdkafka++ adapter path added)
 - Implement location event serialization/deserialization. (Done for shared runtime codec; real Kafka adapter pending.)
 - Implement geofence event serialization. (Done for shared runtime codec; real Kafka adapter pending.)
-- Implement matching request/result serialization. (Done for shared runtime codec; matching Kafka loop pending.)
+- Implement matching request/result serialization and fallback Kafka loop. (Done for shared runtime codec and matching service loop; broker-backed Kafka verification pending.)
 - Add topic config validation.
 - Add DLQ payload format and replay metadata. (Shared location payload replay done; retry metadata pending.)
 

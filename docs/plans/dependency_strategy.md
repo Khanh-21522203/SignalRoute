@@ -64,14 +64,13 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 
 ## Recommended Implementation Order
 1. Install/provide the RdKafka CMake package and run broker-backed compile/integration verification for the `SR_ENABLE_REAL_KAFKA` adapter path.
-2. Add the matching production Kafka request/result loop using the matching payload codec.
-3. Enable gRPC service stub generation once `gRPC::grpc++` and `gRPC::grpc_cpp_plugin` are available.
-4. Remove or narrow runtime CSV public paths only after durable Kafka/protobuf integration tests pass for each boundary.
-5. Replace the deterministic H3 fallback behind `H3Index`.
-6. Add Redis integration behind `RedisClient`.
-7. Add PostGIS integration behind `PostgresClient`.
-8. Add gRPC gateway/query/admin services on top of existing handlers.
-9. Add Prometheus exporter and health/readiness endpoints.
+2. Enable gRPC service stub generation once `gRPC::grpc++` and `gRPC::grpc_cpp_plugin` are available.
+3. Remove or narrow runtime CSV public paths only after durable Kafka/protobuf integration tests pass for each boundary.
+4. Replace the deterministic H3 fallback behind `H3Index`.
+5. Add Redis integration behind `RedisClient`.
+6. Add PostGIS integration behind `PostgresClient`.
+7. Add gRPC gateway/query/admin services on top of existing handlers.
+8. Add Prometheus exporter and health/readiness endpoints.
 
 ## Verification Matrix
 
@@ -86,4 +85,4 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
 
 ## Current Boundary
-Batch 23 adds an optional librdkafka++ adapter path behind `KafkaProducer` and `KafkaConsumer` while preserving the in-memory fallback as the default. Local verification confirms fallback and protobuf builds pass, and `SR_ENABLE_REAL_KAFKA=ON` fails clearly because this machine lacks `RdKafkaConfig.cmake`. Broker-backed compile/run verification remains pending until RdKafka is installed. Matching still needs the durable Kafka request/result loop, and gRPC service stubs remain gated by `SR_ENABLE_GRPC`.
+Batch 24 adds the matching request/result Kafka loop behind `MatchingService::process_requests_once`, using the shared matching payload codec and existing Kafka wrapper. Local fallback and protobuf builds pass. `SR_ENABLE_REAL_KAFKA=ON` broker-backed compile/run verification remains pending until RdKafka is installed, and gRPC service stubs remain gated by `SR_ENABLE_GRPC`.
