@@ -384,9 +384,9 @@ Replace the deterministic local grid fallback with real H3 while preserving the 
 
 ### Work Items
 - Integrate H3 dependency through the chosen dependency manager.
-- Implement `lat_lng_to_cell` using real H3.
-- Implement `grid_disk` using real H3.
-- Implement `polygon_to_cells` using overlapping containment semantics.
+- Implement `lat_lng_to_cell` using real H3. (Adapter path added behind `SR_ENABLE_REAL_H3`.)
+- Implement `grid_disk` using real H3. (Adapter path added behind `SR_ENABLE_REAL_H3`.)
+- Implement `polygon_to_cells` using H3 polygon fill. (Adapter path added; overlapping containment mode depends on installed H3 API support.)
 - Verify radius-to-k mapping against documented resolution tables.
 - Add edge-case handling:
   - invalid coordinates

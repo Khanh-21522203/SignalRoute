@@ -11,7 +11,7 @@ This file defines the preparation required before running multiple agents or dev
 - The tracked completion roadmap is `docs/plans/finish_plan.md`.
 - Dependency strategy is tracked in `docs/plans/dependency_strategy.md`.
 - Gateway, processor, geofence, matching payload codecs, and DLQ replay use shared codecs. Protobuf payloads are emitted when `SR_ENABLE_PROTOBUF=ON`; CSV remains fallback-build scaffolding and decoder compatibility.
-- Redis, PostGIS, H3, and metrics adapters currently have deterministic in-memory fallback behavior for unit and lifecycle tests. Kafka keeps deterministic fallback behavior by default, has an optional `SR_ENABLE_REAL_KAFKA` librdkafka++ adapter path pending broker-backed verification, and now drives the matching request/result loop through the shared matching codec.
+- Redis, PostGIS, and metrics adapters currently have deterministic in-memory fallback behavior for unit and lifecycle tests. H3 keeps deterministic fallback behavior by default and has an optional `SR_ENABLE_REAL_H3` C API adapter path pending real-H3 verification. Kafka keeps deterministic fallback behavior by default, has an optional `SR_ENABLE_REAL_KAFKA` librdkafka++ adapter path pending broker-backed verification, and drives the matching request/result loop through the shared matching codec.
 - Processor/geofence/metrics observer wiring is implemented for in-process fallback composition.
 - Domain-to-wire conversion contracts live under `src/common/proto/`; generated protobuf code should adapt through that boundary.
 
@@ -98,7 +98,7 @@ An agent must report:
 Start remaining production work in this order unless deliberately coordinated:
 
 1. Broker-backed Kafka compile/integration verification once RdKafka is installed
-2. Real H3 adapter behind the existing `H3Index` interface
+2. Real-H3 compile/integration verification once H3 is installed
 3. Real Redis adapter behind the existing state/fence/reservation contract
 4. Real PostGIS adapter behind the existing history/geofence repository contract
 5. Gateway gRPC/UDP transport over the existing validation/rate-limit/publish flow
@@ -130,4 +130,4 @@ Do not run these at the same time without coordination:
 - CMake dependency strategy and any task adding external dependencies
 
 ## Next Recommended Implementation Task
-Install/provide RdKafka and run broker-backed compile/integration tests for the `SR_ENABLE_REAL_KAFKA` adapter path, or proceed to the real H3 adapter if dependency setup is deferred. Keep CSV fallback decoding until durable Kafka integration tests pass. gRPC service stubs remain gated behind `SR_ENABLE_GRPC`.
+Install/provide RdKafka and H3 to run real adapter compile/integration tests, or proceed to the Redis adapter behind `RedisClient` if dependency setup remains deferred. Keep CSV fallback decoding until durable Kafka integration tests pass. gRPC service stubs remain gated behind `SR_ENABLE_GRPC`.

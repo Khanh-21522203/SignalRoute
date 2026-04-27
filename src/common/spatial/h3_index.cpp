@@ -1,11 +1,19 @@
 #include "h3_index.h"
 
+#if SIGNALROUTE_HAS_H3
+#if __has_include(<h3/h3api.h>)
+#include <h3/h3api.h>
+#elif __has_include(<h3api.h>)
+#include <h3api.h>
+#else
+#error "SIGNALROUTE_HAS_H3 is enabled, but h3api.h was not found"
+#endif
+#endif
+
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
-#include <algorithm>
 #include <string>
-
-// TODO: #include <h3/h3api.h>  // H3 C API
 
 namespace signalroute {
 
@@ -15,6 +23,26 @@ constexpr int64_t kCoordMask = (1LL << 29) - 1;
 constexpr int64_t kLatShift = 29;
 constexpr int64_t kResShift = 58;
 
+#if SIGNALROUTE_HAS_H3
+constexpr double kPi = 3.141592653589793238462643383279502884;
+
+double degs_to_rads(double degrees) {
+    return degrees * kPi / 180.0;
+}
+
+LatLng to_h3_lat_lng(double lat, double lon) {
+    LatLng out;
+    out.lat = degs_to_rads(lat);
+    out.lng = degs_to_rads(lon);
+    return out;
+}
+
+void throw_on_h3_error(H3Error error, const std::string& operation) {
+    if (error != E_SUCCESS) {
+        throw std::runtime_error(operation + " failed with H3 error: " + std::to_string(error));
+    }
+}
+#else
 int64_t cells_per_degree(double edge_m) {
     return std::max<int64_t>(1, static_cast<int64_t>(std::llround(111'320.0 / edge_m)));
 }
@@ -30,6 +58,19 @@ void unpack_cell(int64_t cell, int& resolution, int64_t& lat_idx, int64_t& lon_i
     lat_idx = (cell >> kLatShift) & kCoordMask;
     lon_idx = cell & kCoordMask;
 }
+#endif
+
+bool valid_lat_lon(double lat, double lon) {
+    return std::isfinite(lat) && std::isfinite(lon)
+        && lat >= -90.0 && lat <= 90.0
+        && lon >= -180.0 && lon <= 180.0;
+}
+
+void validate_lat_lon(double lat, double lon) {
+    if (!valid_lat_lon(lat, lon)) {
+        throw std::invalid_argument("coordinate out of range");
+    }
+}
 
 } // namespace
 
@@ -43,16 +84,19 @@ H3Index::H3Index(int resolution)
 }
 
 int64_t H3Index::lat_lng_to_cell(double lat, double lon) const {
-    if (!std::isfinite(lat) || !std::isfinite(lon)
-        || lat < -90.0 || lat > 90.0
-        || lon < -180.0 || lon > 180.0) {
-        throw std::invalid_argument("coordinate out of range");
-    }
+    validate_lat_lon(lat, lon);
 
+#if SIGNALROUTE_HAS_H3
+    const LatLng geo = to_h3_lat_lng(lat, lon);
+    ::H3Index cell = 0;
+    throw_on_h3_error(latLngToCell(&geo, resolution_, &cell), "latLngToCell");
+    return static_cast<int64_t>(cell);
+#else
     const int64_t scale = cells_per_degree(avg_edge_length_m());
     const int64_t lat_idx = static_cast<int64_t>(std::floor((lat + 90.0) * scale));
     const int64_t lon_idx = static_cast<int64_t>(std::floor((lon + 180.0) * scale));
     return pack_cell(resolution_, lat_idx, lon_idx);
+#endif
 }
 
 std::vector<int64_t> H3Index::grid_disk(int64_t center_cell, int k) const {
@@ -60,6 +104,22 @@ std::vector<int64_t> H3Index::grid_disk(int64_t center_cell, int k) const {
         return {};
     }
 
+#if SIGNALROUTE_HAS_H3
+    int64_t max_size = 0;
+    throw_on_h3_error(maxGridDiskSize(k, &max_size), "maxGridDiskSize");
+
+    std::vector<::H3Index> raw(static_cast<std::size_t>(max_size));
+    throw_on_h3_error(gridDisk(static_cast<::H3Index>(center_cell), k, raw.data()), "gridDisk");
+
+    std::vector<int64_t> result;
+    result.reserve(raw.size());
+    for (const auto cell : raw) {
+        if (cell != 0) {
+            result.push_back(static_cast<int64_t>(cell));
+        }
+    }
+    return result;
+#else
     int encoded_resolution = 0;
     int64_t center_lat = 0;
     int64_t center_lon = 0;
@@ -73,6 +133,7 @@ std::vector<int64_t> H3Index::grid_disk(int64_t center_cell, int k) const {
         }
     }
     return result;
+#endif
 }
 
 int H3Index::radius_to_k(double radius_m) const {
@@ -88,6 +149,50 @@ int H3Index::radius_to_k(double radius_m) const {
 std::vector<int64_t> H3Index::polygon_to_cells(
     const std::vector<std::pair<double, double>>& polygon) const
 {
+    if (polygon.empty()) {
+        return {};
+    }
+    for (const auto& [lat, lon] : polygon) {
+        validate_lat_lon(lat, lon);
+    }
+
+#if SIGNALROUTE_HAS_H3
+    std::vector<LatLng> vertices;
+    vertices.reserve(polygon.size());
+    for (const auto& [lat, lon] : polygon) {
+        vertices.push_back(to_h3_lat_lng(lat, lon));
+    }
+
+    GeoLoop loop;
+    loop.numVerts = static_cast<int>(vertices.size());
+    loop.verts = vertices.data();
+
+    GeoPolygon geo_polygon;
+    geo_polygon.geoloop = loop;
+    geo_polygon.numHoles = 0;
+    geo_polygon.holes = nullptr;
+
+    int64_t max_size = 0;
+    throw_on_h3_error(
+        maxPolygonToCellsSize(&geo_polygon, resolution_, 0, &max_size),
+        "maxPolygonToCellsSize");
+
+    std::vector<::H3Index> raw(static_cast<std::size_t>(max_size));
+    throw_on_h3_error(
+        polygonToCells(&geo_polygon, resolution_, 0, raw.data()),
+        "polygonToCells");
+
+    std::vector<int64_t> cells;
+    cells.reserve(raw.size());
+    for (const auto cell : raw) {
+        if (cell != 0) {
+            cells.push_back(static_cast<int64_t>(cell));
+        }
+    }
+    std::sort(cells.begin(), cells.end());
+    cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
+    return cells;
+#else
     std::vector<int64_t> cells;
     cells.reserve(polygon.size());
     for (const auto& [lat, lon] : polygon) {
@@ -96,12 +201,15 @@ std::vector<int64_t> H3Index::polygon_to_cells(
     std::sort(cells.begin(), cells.end());
     cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
     return cells;
+#endif
 }
 
 double H3Index::avg_edge_length_m() const {
-    // TODO: Implement using h3::getHexagonEdgeLengthAvgM(resolution_)
-    //
-    // Hardcoded approximate values for common resolutions:
+#if SIGNALROUTE_HAS_H3
+    double edge_m = 0.0;
+    throw_on_h3_error(getHexagonEdgeLengthAvgM(resolution_, &edge_m), "getHexagonEdgeLengthAvgM");
+    return edge_m;
+#else
     static const double edge_lengths[] = {
         1107712.591, // res 0
         418676.005,  // res 1
@@ -123,7 +231,8 @@ double H3Index::avg_edge_length_m() const {
     if (resolution_ >= 0 && resolution_ <= 15) {
         return edge_lengths[resolution_];
     }
-    return 1220.629; // fallback to res 7
+    return 1220.629;
+#endif
 }
 
 } // namespace signalroute

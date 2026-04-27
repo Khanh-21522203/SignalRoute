@@ -66,7 +66,7 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 1. Install/provide the RdKafka CMake package and run broker-backed compile/integration verification for the `SR_ENABLE_REAL_KAFKA` adapter path.
 2. Enable gRPC service stub generation once `gRPC::grpc++` and `gRPC::grpc_cpp_plugin` are available.
 3. Remove or narrow runtime CSV public paths only after durable Kafka/protobuf integration tests pass for each boundary.
-4. Replace the deterministic H3 fallback behind `H3Index`.
+4. Install/provide the H3 CMake package and run real-H3 compile/integration verification for `SR_ENABLE_REAL_H3`; the adapter path is present behind `H3Index`.
 5. Add Redis integration behind `RedisClient`.
 6. Add PostGIS integration behind `PostgresClient`.
 7. Add gRPC gateway/query/admin services on top of existing handlers.
@@ -85,4 +85,4 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
 
 ## Current Boundary
-Batch 24 adds the matching request/result Kafka loop behind `MatchingService::process_requests_once`, using the shared matching payload codec and existing Kafka wrapper. Local fallback and protobuf builds pass. `SR_ENABLE_REAL_KAFKA=ON` broker-backed compile/run verification remains pending until RdKafka is installed, and gRPC service stubs remain gated by `SR_ENABLE_GRPC`.
+Batch 25 adds an optional H3 C API adapter path behind `H3Index` while preserving the deterministic fallback as the default. Local fallback and protobuf builds pass, and `SR_ENABLE_REAL_H3=ON` fails clearly because this machine lacks `h3Config.cmake` / `h3-config.cmake`. Broker-backed Kafka verification remains pending until RdKafka is installed, and gRPC service stubs remain gated by `SR_ENABLE_GRPC`.

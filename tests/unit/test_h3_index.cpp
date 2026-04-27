@@ -127,6 +127,30 @@ void test_polygon_to_cells_deduplication() {
     std::cout << "  PASS: polygon_to_cells deduplication\n";
 }
 
+void test_polygon_validation_and_empty_input() {
+    signalroute::H3Index h3(7);
+
+    assert(h3.polygon_to_cells({}).empty());
+    expect_invalid_argument([&] {
+        h3.polygon_to_cells({{10.0, 106.0}, {std::numeric_limits<double>::infinity(), 106.0}});
+    });
+    expect_invalid_argument([&] {
+        h3.polygon_to_cells({{10.0, 106.0}, {10.0, 180.000001}});
+    });
+    std::cout << "  PASS: polygon validation and empty input\n";
+}
+
+void test_average_edge_length_decreases_with_resolution() {
+    double previous = signalroute::H3Index(0).avg_edge_length_m();
+    for (int resolution = 1; resolution <= 15; ++resolution) {
+        const double current = signalroute::H3Index(resolution).avg_edge_length_m();
+        assert(current > 0.0);
+        assert(current < previous);
+        previous = current;
+    }
+    std::cout << "  PASS: average edge length by resolution\n";
+}
+
 } // namespace
 
 int main() {
@@ -137,6 +161,8 @@ int main() {
     test_grid_disk_counts_and_negative_k();
     test_radius_to_k();
     test_polygon_to_cells_deduplication();
+    test_polygon_validation_and_empty_input();
+    test_average_edge_length_decreases_with_resolution();
     std::cout << "All H3 fallback tests passed.\n";
     return 0;
 }
