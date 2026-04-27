@@ -170,12 +170,54 @@ void test_ingest_batch_reports_received_and_rejects_oversized_batch() {
     assert(!consumer.poll(0).has_value());
 }
 
+void test_transport_ingest_one_returns_stamped_response() {
+    const auto topic = topic_name("transport_one");
+    auto config = config_for_topic(topic);
+    signalroute::GatewayService gateway;
+    signalroute::KafkaConsumer consumer(config.kafka, {topic});
+
+    gateway.start(config);
+    const auto response = gateway.handle_ingest_one({event("dev-1", 1)});
+
+    assert(response.ok());
+    assert(response.accepted_count == 1);
+    assert(response.rejected_count == 0);
+    assert(response.errors.empty());
+    assert(response.accepted_events.size() == 1);
+    assert(response.accepted_events.front().server_recv_ms > 0);
+
+    const auto msg = consumer.poll(0);
+    assert(msg.has_value());
+    assert(msg->key == "dev-1");
+}
+
+void test_transport_ingest_batch_preserves_batch_validation() {
+    const auto topic = topic_name("transport_batch");
+    auto config = config_for_topic(topic, 10, 1);
+    signalroute::GatewayService gateway;
+    signalroute::KafkaConsumer consumer(config.kafka, {topic});
+
+    gateway.start(config);
+    const auto response = gateway.handle_ingest_batch({
+        {event("dev-1", 1), event("dev-2", 1)}
+    });
+
+    assert(!response.ok());
+    assert(response.accepted_count == 0);
+    assert(response.rejected_count == 2);
+    assert(response.errors.size() == 2);
+    assert(response.errors.front() == "batch too large");
+    assert(!consumer.poll(0).has_value());
+}
+
 int main() {
     std::cout << "test_gateway_service:\n";
     test_ingest_one_validates_stamps_publishes_and_emits_event();
     test_invalid_event_is_rejected_without_publish();
     test_rate_limited_event_emits_backpressure_and_rejection();
     test_ingest_batch_reports_received_and_rejects_oversized_batch();
+    test_transport_ingest_one_returns_stamped_response();
+    test_transport_ingest_batch_preserves_batch_validation();
     std::cout << "All gateway service tests passed.\n";
     return 0;
 }

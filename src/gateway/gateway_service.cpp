@@ -160,6 +160,30 @@ IngestResult GatewayService::ingest_batch(const std::vector<LocationEvent>& batc
     return result;
 }
 
+IngestResponse GatewayService::handle_ingest_one(IngestOneRequest request) {
+    IngestResponse response;
+    auto result = ingest_one(std::move(request.event));
+    if (result.is_ok()) {
+        response.accepted = true;
+        response.accepted_count = 1;
+        response.accepted_events.push_back(result.value());
+    } else {
+        response.rejected_count = 1;
+        response.errors.push_back(result.error());
+    }
+    return response;
+}
+
+IngestResponse GatewayService::handle_ingest_batch(IngestBatchRequest request) {
+    IngestResponse response;
+    const auto result = ingest_batch(request.events);
+    response.accepted = result.ok();
+    response.accepted_count = result.accepted;
+    response.rejected_count = result.rejected;
+    response.errors = result.errors;
+    return response;
+}
+
 std::size_t GatewayService::tracked_devices_for_test() const {
     return rate_limiter_ ? rate_limiter_->tracked_devices() : 0;
 }

@@ -45,6 +45,24 @@ struct IngestResult {
     [[nodiscard]] bool ok() const { return rejected == 0; }
 };
 
+struct IngestOneRequest {
+    LocationEvent event;
+};
+
+struct IngestBatchRequest {
+    std::vector<LocationEvent> events;
+};
+
+struct IngestResponse {
+    bool accepted = false;
+    int accepted_count = 0;
+    int rejected_count = 0;
+    std::vector<LocationEvent> accepted_events;
+    std::vector<std::string> errors;
+
+    [[nodiscard]] bool ok() const { return accepted && rejected_count == 0; }
+};
+
 class GatewayService {
 public:
     GatewayService();
@@ -82,6 +100,8 @@ public:
 
     Result<LocationEvent, std::string> ingest_one(LocationEvent event);
     IngestResult ingest_batch(const std::vector<LocationEvent>& batch);
+    IngestResponse handle_ingest_one(IngestOneRequest request);
+    IngestResponse handle_ingest_batch(IngestBatchRequest request);
 
     std::size_t tracked_devices_for_test() const;
 

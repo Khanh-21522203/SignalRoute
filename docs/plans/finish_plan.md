@@ -19,8 +19,8 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - PostGIS fallback behavior for trip history, spatial trip filters, geofence rules, and geofence audit records; optional libpq/PostGIS adapter path is gated behind `SR_ENABLE_REAL_POSTGIS`.
 - Processor fallback flow with dedup, sequence guard, state/history fan-out, offset commits, and shared location payload decoding that uses protobuf when enabled and CSV as fallback.
 - In-process observer-style composition for processor -> state/history -> geofence -> metrics.
-- Gateway fallback ingest methods with validation, rate limiting, shared location payload encoding, and typed gateway events.
-- Query fallback service lifecycle for latest, nearby, trip, and spatial trip reads.
+- Gateway fallback ingest methods with validation, rate limiting, shared location payload encoding, typed gateway events, and dependency-free transport-facing ingest request/response handlers.
+- Query fallback service lifecycle for latest, nearby, trip, and spatial trip reads, plus dependency-free transport-facing request/response handlers for those query paths.
 - Geofence fallback evaluation for enter, exit, old-cell exit, dwell, audit, and event publication.
 - Matching fallback service lifecycle, reservation flow, nearest strategy, deadlines, cleanup, typed matching events, and Kafka request/result loop over the shared matching payload codec.
 - Worker fallback `run_once` flows for H3 cleanup, DLQ replay, and metrics export.
@@ -33,8 +33,8 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Kafka, Redis, PostGIS, gRPC, real H3, and Prometheus still need package-backed integration verification. Protobuf message generation is optional and integrated behind `SR_ENABLE_PROTOBUF`.
 - Production dependency switches exist; Kafka, Redis, H3, and PostGIS now have gated adapter paths behind existing interfaces, but package-backed compile/runtime verification is pending where local packages are unavailable.
 - Gateway, processor, geofence, matching codec, and DLQ replay boundaries now use shared payload codecs that emit protobuf when `SR_ENABLE_PROTOBUF=ON` and preserve CSV fallback decoding for skeleton tests. Real Kafka transport is still pending.
-- Gateway does not expose real gRPC/UDP endpoints yet.
-- Query service does not expose real gRPC/HTTP endpoints yet.
+- Gateway has dependency-free transport handler methods but does not expose real gRPC/UDP endpoints yet.
+- Query service has dependency-free transport handler methods but does not expose real gRPC/HTTP endpoints yet.
 - Event bus wiring is implemented for the processor/geofence/metrics fallback path, but cross-role production deployment still needs explicit durable Kafka/protobuf boundaries.
 - Geofence fallback flows and matching Kafka fallback request/result flow are implemented, but production adapters, transport handlers, and admin APIs are still pending.
 
@@ -240,7 +240,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task H1: Gateway Service
 - **Ownership:** `src/gateway/`, gateway tests.
-- **Status:** Done fallback for direct ingest methods; gateway runtime emits protobuf location payloads when `SR_ENABLE_PROTOBUF=ON` and CSV in default fallback builds; gRPC/UDP pending.
+- **Status:** Done fallback for direct ingest methods and dependency-free transport-facing request/response handlers; gateway runtime emits protobuf location payloads when `SR_ENABLE_PROTOBUF=ON` and CSV in default fallback builds; real gRPC/UDP endpoint binding pending.
 - **Goal:** Implement gRPC/UDP ingestion and event publication.
 - **Items:** service handlers, validation, rate limiting, server timestamp, Kafka publish, in-process event publish for standalone mode.
 - **Depends on:** A1/A2, G1/G2.
@@ -257,7 +257,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task J1: Query Transport
 - **Ownership:** `src/query/query_service.*`, query proto handlers/tests.
-- **Status:** Handler/service fallback done; gRPC/HTTP transport pending.
+- **Status:** Handler/service fallback and dependency-free transport-facing request/response handlers done; real gRPC/HTTP endpoint binding pending.
 - **Goal:** Expose latest, nearby, and trip APIs.
 - **Items:** gRPC service implementation, response mapping, validation, error mapping, streaming decision.
 - **Depends on:** G2, D2, F1.

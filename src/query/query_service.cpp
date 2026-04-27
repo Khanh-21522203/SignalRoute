@@ -7,9 +7,23 @@
 #include "../common/clients/redis_client.h"
 #include "../common/spatial/h3_index.h"
 
+#include <cmath>
 #include <iostream>
 
 namespace signalroute {
+namespace {
+
+bool valid_lat_lon(double lat, double lon) {
+    return std::isfinite(lat) && std::isfinite(lon) &&
+           lat >= -90.0 && lat <= 90.0 &&
+           lon >= -180.0 && lon <= 180.0;
+}
+
+bool valid_trip_range(int64_t from_ts, int64_t to_ts, int limit) {
+    return from_ts <= to_ts && limit > 0;
+}
+
+} // namespace
 
 QueryService::QueryService() = default;
 QueryService::~QueryService() { if (running_) stop(); }
@@ -89,6 +103,111 @@ std::vector<LocationEvent> QueryService::trip_spatial(
     }
     return trip_handler_->handle_spatial(
         device_id, from_ts, to_ts, center_lat, center_lon, radius_m, sample_interval_s, limit);
+}
+
+LatestLocationResponse QueryService::handle_latest(LatestLocationRequest request) {
+    LatestLocationResponse response;
+    if (!running_) {
+        response.error = "query service is not running";
+        return response;
+    }
+    if (request.device_id.empty()) {
+        response.error = "device_id is required";
+        return response;
+    }
+
+    response.ok = true;
+    const auto state = latest(request.device_id);
+    response.found = state.has_value();
+    if (state.has_value()) {
+        response.state = *state;
+    }
+    return response;
+}
+
+NearbyDevicesResponse QueryService::handle_nearby(NearbyDevicesRequest request) {
+    NearbyDevicesResponse response;
+    if (!running_) {
+        response.error = "query service is not running";
+        return response;
+    }
+    if (!valid_lat_lon(request.lat, request.lon)) {
+        response.error = "valid lat/lon is required";
+        return response;
+    }
+    if (!std::isfinite(request.radius_m) || request.radius_m <= 0.0) {
+        response.error = "radius_m must be positive";
+        return response;
+    }
+    if (request.last_seen_s < 0) {
+        response.error = "last_seen_s must be non-negative";
+        return response;
+    }
+
+    response.ok = true;
+    response.result = nearby(
+        request.lat,
+        request.lon,
+        request.radius_m,
+        request.limit,
+        request.last_seen_s);
+    return response;
+}
+
+TripQueryResponse QueryService::handle_trip(TripQueryRequest request) {
+    TripQueryResponse response;
+    if (!running_) {
+        response.error = "query service is not running";
+        return response;
+    }
+    if (request.device_id.empty()) {
+        response.error = "device_id is required";
+        return response;
+    }
+    if (!valid_trip_range(request.from_ts, request.to_ts, request.limit)) {
+        response.error = "valid time range and positive limit are required";
+        return response;
+    }
+
+    response.ok = true;
+    response.events = trip(
+        request.device_id,
+        request.from_ts,
+        request.to_ts,
+        request.sample_interval_s,
+        request.limit);
+    return response;
+}
+
+TripQueryResponse QueryService::handle_trip_spatial(SpatialTripQueryRequest request) {
+    TripQueryResponse response;
+    if (!running_) {
+        response.error = "query service is not running";
+        return response;
+    }
+    if (request.device_id.empty()) {
+        response.error = "device_id is required";
+        return response;
+    }
+    if (!valid_trip_range(request.from_ts, request.to_ts, request.limit) ||
+        !valid_lat_lon(request.center_lat, request.center_lon) ||
+        !std::isfinite(request.radius_m) ||
+        request.radius_m < 0.0) {
+        response.error = "valid spatial trip query is required";
+        return response;
+    }
+
+    response.ok = true;
+    response.events = trip_spatial(
+        request.device_id,
+        request.from_ts,
+        request.to_ts,
+        request.center_lat,
+        request.center_lon,
+        request.radius_m,
+        request.sample_interval_s,
+        request.limit);
+    return response;
 }
 
 bool QueryService::seed_device_state_for_test(DeviceState state) {

@@ -30,6 +30,56 @@ class PostgresClient;
 class RedisClient;
 class TripHandler;
 
+struct LatestLocationRequest {
+    std::string device_id;
+};
+
+struct LatestLocationResponse {
+    bool ok = false;
+    bool found = false;
+    DeviceState state;
+    std::string error;
+};
+
+struct NearbyDevicesRequest {
+    double lat = 0.0;
+    double lon = 0.0;
+    double radius_m = 0.0;
+    int limit = 0;
+    int last_seen_s = 0;
+};
+
+struct NearbyDevicesResponse {
+    bool ok = false;
+    NearbyResult result;
+    std::string error;
+};
+
+struct TripQueryRequest {
+    std::string device_id;
+    int64_t from_ts = 0;
+    int64_t to_ts = 0;
+    int sample_interval_s = 0;
+    int limit = 0;
+};
+
+struct SpatialTripQueryRequest {
+    std::string device_id;
+    int64_t from_ts = 0;
+    int64_t to_ts = 0;
+    double center_lat = 0.0;
+    double center_lon = 0.0;
+    double radius_m = 0.0;
+    int sample_interval_s = 0;
+    int limit = 0;
+};
+
+struct TripQueryResponse {
+    bool ok = false;
+    std::vector<LocationEvent> events;
+    std::string error;
+};
+
 class QueryService {
 public:
     QueryService();
@@ -56,6 +106,10 @@ public:
         double radius_m,
         int sample_interval_s,
         int limit);
+    LatestLocationResponse handle_latest(LatestLocationRequest request);
+    NearbyDevicesResponse handle_nearby(NearbyDevicesRequest request);
+    TripQueryResponse handle_trip(TripQueryRequest request);
+    TripQueryResponse handle_trip_spatial(SpatialTripQueryRequest request);
 
     bool seed_device_state_for_test(DeviceState state);
     void seed_trip_points_for_test(const std::vector<LocationEvent>& events);

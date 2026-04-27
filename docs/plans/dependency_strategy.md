@@ -87,4 +87,4 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
 
 ## Current Boundary
-Batch 27 adds an optional libpq/PostGIS adapter path behind `PostgresClient` while preserving the deterministic fallback as the default. Local fallback and protobuf builds pass. Package-backed configure checks currently fail clearly because this machine lacks RdKafka, H3, hiredis/redis++, and PostgreSQL/libpq development packages. gRPC service stubs remain gated by `SR_ENABLE_GRPC`.
+Batch 28 adds dependency-free gateway/query transport-facing handlers over existing service methods while preserving fallback runtime behavior. Local fallback and protobuf builds pass. Package-backed configure checks currently fail clearly because this machine lacks RdKafka, H3, hiredis/redis++, PostgreSQL/libpq, and gRPC development packages. gRPC service stubs remain gated by `SR_ENABLE_GRPC`.
