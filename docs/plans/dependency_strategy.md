@@ -52,6 +52,7 @@ The provider value does not install dependencies by itself. It records the inten
 - `src/common/proto/` owns dependency-free wire-shape structs and domain conversion helpers. Generated protobuf types should adapt to these helpers instead of leaking through service/domain code.
 - Real Kafka adapter code is hidden behind the existing wrapper API and pimpl storage; public headers do not expose librdkafka types.
 - Real Redis adapter code is hidden behind the existing wrapper API and pimpl storage; public headers do not expose redis-plus-plus types.
+- Real PostGIS adapter code is hidden behind the existing wrapper API and pimpl storage; public headers do not expose libpq types.
 - `.proto` files use package `signalroute.v1`, producing generated C++ types under `signalroute::v1`. This intentionally avoids name collisions with domain types such as `signalroute::LocationEvent`.
 
 ## Adapter Rule
@@ -69,7 +70,7 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 3. Remove or narrow runtime CSV public paths only after durable Kafka/protobuf integration tests pass for each boundary.
 4. Install/provide the H3 CMake package and run real-H3 compile/integration verification for `SR_ENABLE_REAL_H3`; the adapter path is present behind `H3Index`.
 5. Install/provide hiredis and redis-plus-plus CMake packages and run real-Redis compile/integration verification for `SR_ENABLE_REAL_REDIS`; the adapter path is present behind `RedisClient`.
-6. Add PostGIS integration behind `PostgresClient`.
+6. Install/provide PostgreSQL/libpq headers and libraries, then run real-PostGIS compile/integration verification for `SR_ENABLE_REAL_POSTGIS`; the adapter path is present behind `PostgresClient`.
 7. Add gRPC gateway/query/admin services on top of existing handlers.
 8. Add Prometheus exporter and health/readiness endpoints.
 
@@ -86,4 +87,4 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
 
 ## Current Boundary
-Batch 26 adds an optional redis-plus-plus adapter path behind `RedisClient` while preserving the deterministic fallback as the default. Local fallback and protobuf builds pass, and `SR_ENABLE_REAL_REDIS=ON` fails clearly because this machine lacks `hiredisConfig.cmake` / `hiredis-config.cmake`. Real-H3 and broker-backed Kafka verification remain pending until those packages are installed, and gRPC service stubs remain gated by `SR_ENABLE_GRPC`.
+Batch 27 adds an optional libpq/PostGIS adapter path behind `PostgresClient` while preserving the deterministic fallback as the default. Local fallback and protobuf builds pass. Package-backed configure checks currently fail clearly because this machine lacks RdKafka, H3, hiredis/redis++, and PostgreSQL/libpq development packages. gRPC service stubs remain gated by `SR_ENABLE_GRPC`.

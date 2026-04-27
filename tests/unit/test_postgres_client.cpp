@@ -56,6 +56,17 @@ void test_query_trip_filters_sorts_and_limits() {
     assert(pg.query_trip("dev-1", 0, 4000, 0).empty());
 }
 
+void test_query_trip_uses_server_receive_time_when_event_time_missing() {
+    signalroute::PostgresClient pg(signalroute::PostGISConfig{});
+    auto event = make_event("dev-1", 1, 0, 10.1, 106.1);
+    event.server_recv_ms = 2500;
+
+    pg.batch_insert_trip_points({event});
+
+    assert(pg.query_trip("dev-1", 2000, 3000, 10).size() == 1);
+    assert(pg.query_trip("dev-1", 0, 2000, 10).empty());
+}
+
 void test_query_trip_spatial_filters_by_radius() {
     signalroute::PostgresClient pg(signalroute::PostGISConfig{});
 
@@ -69,6 +80,22 @@ void test_query_trip_spatial_filters_by_radius() {
     assert(nearby.size() == 1);
     assert(nearby.front().seq == 1);
     assert(pg.query_trip_spatial("dev-1", 0, 3000, 10.8231, 106.6297, -1.0, 10).empty());
+}
+
+void test_query_trip_spatial_sorts_and_limits() {
+    signalroute::PostgresClient pg(signalroute::PostGISConfig{});
+
+    pg.batch_insert_trip_points({
+        make_event("dev-1", 3, 3000, 10.8233, 106.6299),
+        make_event("dev-1", 1, 1000, 10.8231, 106.6297),
+        make_event("dev-1", 2, 2000, 10.8232, 106.6298),
+    });
+
+    const auto nearby = pg.query_trip_spatial("dev-1", 0, 4000, 10.8231, 106.6297, 500.0, 2);
+
+    assert(nearby.size() == 2);
+    assert(nearby[0].seq == 1);
+    assert(nearby[1].seq == 2);
 }
 
 void test_geofence_repository_fallback() {
@@ -102,7 +129,9 @@ int main() {
     std::cout << "test_postgres_client:\n";
     test_trip_insert_is_idempotent();
     test_query_trip_filters_sorts_and_limits();
+    test_query_trip_uses_server_receive_time_when_event_time_missing();
     test_query_trip_spatial_filters_by_radius();
+    test_query_trip_spatial_sorts_and_limits();
     test_geofence_repository_fallback();
     std::cout << "All Postgres client tests passed.\n";
     return 0;

@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <utility>
@@ -27,7 +28,7 @@ namespace signalroute {
 
 class PostgresClient {
 public:
-    explicit PostgresClient(const PostGISConfig& config);
+    explicit PostgresClient(const PostGISConfig& config = PostGISConfig{});
     ~PostgresClient();
 
     PostgresClient(const PostgresClient&) = delete;
@@ -99,17 +100,15 @@ public:
     void set_active_fences(std::vector<GeofenceRule> fences);
 
 private:
+    struct Impl;
+
     PostGISConfig config_;
+    std::unique_ptr<Impl> impl_;
     mutable std::mutex mu_;
     std::vector<LocationEvent> trip_points_;
     std::vector<GeofenceRule> active_fences_;
     std::vector<GeofenceEventRecord> geofence_events_;
     std::set<std::pair<std::string, uint64_t>> trip_point_keys_;
-
-    // TODO: Add connection pool
-    // std::unique_ptr<pqxx::connection_pool> pool_;
-    //
-    // TODO: Pre-prepared statement names
 };
 
 } // namespace signalroute

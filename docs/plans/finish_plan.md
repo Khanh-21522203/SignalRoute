@@ -16,7 +16,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - CTest wiring for independent unit executables.
 - In-memory Kafka producer/consumer fallback with produce, poll, commit, callback, and lag behavior; optional librdkafka++ adapter code is gated behind `SR_ENABLE_REAL_KAFKA`.
 - Redis fallback behavior for device state, H3 cell membership, fence state, reservations, TTL expiry, and stale H3 cleanup; optional redis-plus-plus adapter path is gated behind `SR_ENABLE_REAL_REDIS`.
-- PostGIS fallback behavior for trip history, spatial trip filters, geofence rules, and geofence audit records.
+- PostGIS fallback behavior for trip history, spatial trip filters, geofence rules, and geofence audit records; optional libpq/PostGIS adapter path is gated behind `SR_ENABLE_REAL_POSTGIS`.
 - Processor fallback flow with dedup, sequence guard, state/history fan-out, offset commits, and shared location payload decoding that uses protobuf when enabled and CSV as fallback.
 - In-process observer-style composition for processor -> state/history -> geofence -> metrics.
 - Gateway fallback ingest methods with validation, rate limiting, shared location payload encoding, and typed gateway events.
@@ -30,8 +30,8 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Protobuf package namespace is `signalroute.v1`, so generated C++ types live under `signalroute::v1` and do not collide with domain types under `signalroute`.
 
 ### Known Boundaries
-- Kafka, Redis, PostGIS, gRPC, real H3, and Prometheus are not integrated. Protobuf message generation is optional and integrated behind `SR_ENABLE_PROTOBUF`.
-- Production dependency switches exist but real adapter implementations still need to be written behind existing interfaces.
+- Kafka, Redis, PostGIS, gRPC, real H3, and Prometheus still need package-backed integration verification. Protobuf message generation is optional and integrated behind `SR_ENABLE_PROTOBUF`.
+- Production dependency switches exist; Kafka, Redis, H3, and PostGIS now have gated adapter paths behind existing interfaces, but package-backed compile/runtime verification is pending where local packages are unavailable.
 - Gateway, processor, geofence, matching codec, and DLQ replay boundaries now use shared payload codecs that emit protobuf when `SR_ENABLE_PROTOBUF=ON` and preserve CSV fallback decoding for skeleton tests. Real Kafka transport is still pending.
 - Gateway does not expose real gRPC/UDP endpoints yet.
 - Query service does not expose real gRPC/HTTP endpoints yet.
@@ -208,6 +208,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task F1: PostGIS Adapter
 - **Ownership:** `src/common/clients/postgres_client.*`, migrations, storage tests.
+- **Status:** Adapter path added behind `SR_ENABLE_REAL_POSTGIS`; package-backed compile/runtime verification pending until PostgreSQL/libpq and PostGIS are available.
 - **Goal:** Implement trip history and geofence persistence.
 - **Items:** connection pool, batch insert, trip replay, spatial trip filters, geofence rule load, geofence audit insert.
 - **Depends on:** C2.
@@ -453,7 +454,7 @@ Implement production Redis adapter for latest state, H3 cell index, fence state,
 Implement trip persistence, trip replay, spatial history filters, geofence rule loading, and geofence event audit writes.
 
 ### Work Items
-- Choose `libpq` or `libpqxx` and connection pooling strategy.
+- Use the gated `libpq` adapter path; add pooling once package-backed integration tests are available.
 - Implement migration runner or document migration execution clearly.
 - Review schema consistency with docs:
   - primary key and unique idempotency constraints
