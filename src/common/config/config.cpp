@@ -268,7 +268,7 @@ void require_port(int value, const std::string& name) {
     }
 }
 
-void validate(const Config& config) {
+void validate_config(const Config& config) {
     const std::set<std::string> roles = {
         "standalone", "gateway", "processor", "query", "geofence", "matcher",
     };
@@ -458,8 +458,12 @@ Config Config::load(const std::string& path) {
     config.observability.log_level =
         get_string(sections, "observability", "log_level", config.observability.log_level, path);
 
-    validate(config);
+    config.validate();
     return config;
+}
+
+void Config::validate() const {
+    validate_config(*this);
 }
 
 } // namespace signalroute

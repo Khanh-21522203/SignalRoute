@@ -39,14 +39,20 @@ public:
     [[nodiscard]] bool is_running() const;
     [[nodiscard]] bool is_healthy() const;
     [[nodiscard]] bool is_ready() const;
+    [[nodiscard]] bool startup_failed() const;
+    [[nodiscard]] const std::string& last_start_error() const;
     [[nodiscard]] const RuntimeRoleSelection& roles() const;
     [[nodiscard]] AdminService& admin();
     [[nodiscard]] const AdminService& admin() const;
 
 private:
+    void register_runtime_probe();
     void register_admin_probes();
+    void register_startup_failure_probe();
 
     std::atomic<bool> running_{false};
+    bool startup_failed_ = false;
+    std::string last_start_error_;
     Config config_;
     RuntimeRoleSelection roles_;
     EventBus event_bus_;

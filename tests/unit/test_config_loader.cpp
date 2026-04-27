@@ -130,6 +130,16 @@ pool_size = "many"
     });
 }
 
+void test_post_load_override_validation_uses_same_rules() {
+    const auto path = write_config("signalroute_config_post_load_override.toml", minimal_valid_config());
+    auto config = signalroute::Config::load(path.string());
+    config.server.role = "worker";
+
+    expect_throws([&] {
+        config.validate();
+    });
+}
+
 int main() {
     std::cout << "test_config_loader:\n";
     test_loads_canonical_config();
@@ -138,6 +148,7 @@ int main() {
     test_invalid_role_is_rejected();
     test_invalid_numeric_value_is_rejected();
     test_invalid_value_type_is_rejected();
+    test_post_load_override_validation_uses_same_rules();
     std::cout << "All config loader tests passed.\n";
     return 0;
 }

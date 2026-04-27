@@ -1,7 +1,8 @@
 #include "runtime_application.h"
 
+#include <exception>
 #include <stdexcept>
-#include <utility>
+#include <string>
 
 namespace signalroute {
 
@@ -12,7 +13,7 @@ RuntimeRoleSelection select_runtime_roles(const Config& config) {
     selected.processor = role == "standalone" || role == "processor";
     selected.query = role == "standalone" || role == "query";
     selected.geofence = (role == "standalone" || role == "geofence") && config.geofence.eval_enabled;
-    selected.matching = role == "standalone" || role == "matcher" || role == "matching";
+    selected.matching = role == "standalone" || role == "matcher";
     return selected;
 }
 
@@ -31,27 +32,48 @@ void RuntimeApplication::start(const Config& config) {
     }
 
     config_ = config;
-    roles_ = select_runtime_roles(config_);
-    admin_ = std::make_unique<AdminService>(config_.server.role);
+    admin_ = std::make_unique<AdminService>(config_.server.role.empty() ? "invalid" : config_.server.role);
+    startup_failed_ = false;
+    last_start_error_.clear();
+    roles_ = RuntimeRoleSelection{};
 
-    if (roles_.processor) {
-        processor_.start(config_, event_bus_);
-    }
-    if (roles_.query) {
-        query_.start(config_);
-    }
-    if (roles_.geofence) {
-        geofence_.start(config_, event_bus_);
-    }
-    if (roles_.matching) {
-        matching_.start(config_);
-    }
-    if (roles_.gateway) {
-        gateway_.start(config_, event_bus_);
-    }
+    try {
+        config_.validate();
+        roles_ = select_runtime_roles(config_);
 
-    register_admin_probes();
-    running_ = true;
+        if (roles_.processor) {
+            processor_.start(config_, event_bus_);
+        }
+        if (roles_.query) {
+            query_.start(config_);
+        }
+        if (roles_.geofence) {
+            geofence_.start(config_, event_bus_);
+        }
+        if (roles_.matching) {
+            matching_.start(config_);
+        }
+        if (roles_.gateway) {
+            gateway_.start(config_, event_bus_);
+        }
+
+        register_admin_probes();
+        running_ = true;
+    } catch (const std::exception& ex) {
+        startup_failed_ = true;
+        last_start_error_ = ex.what();
+        running_ = false;
+        roles_ = RuntimeRoleSelection{};
+        register_startup_failure_probe();
+        throw std::runtime_error("Runtime startup failed: " + last_start_error_);
+    } catch (...) {
+        startup_failed_ = true;
+        last_start_error_ = "unknown runtime startup failure";
+        running_ = false;
+        roles_ = RuntimeRoleSelection{};
+        register_startup_failure_probe();
+        throw std::runtime_error("Runtime startup failed: " + last_start_error_);
+    }
 }
 
 void RuntimeApplication::stop() {
@@ -82,7 +104,7 @@ bool RuntimeApplication::is_running() const {
 }
 
 bool RuntimeApplication::is_healthy() const {
-    if (!running_) {
+    if (!running_ || startup_failed_) {
         return false;
     }
     return (!roles_.gateway || gateway_.is_healthy()) &&
@@ -93,7 +115,7 @@ bool RuntimeApplication::is_healthy() const {
 }
 
 bool RuntimeApplication::is_ready() const {
-    if (!running_) {
+    if (!running_ || startup_failed_) {
         return false;
     }
     return (!roles_.gateway || gateway_.is_ready()) &&
@@ -101,6 +123,14 @@ bool RuntimeApplication::is_ready() const {
            (!roles_.query || query_.is_ready()) &&
            (!roles_.geofence || geofence_.is_ready()) &&
            (!roles_.matching || matching_.is_ready());
+}
+
+bool RuntimeApplication::startup_failed() const {
+    return startup_failed_;
+}
+
+const std::string& RuntimeApplication::last_start_error() const {
+    return last_start_error_;
 }
 
 const RuntimeRoleSelection& RuntimeApplication::roles() const {
@@ -115,8 +145,20 @@ const AdminService& RuntimeApplication::admin() const {
     return *admin_;
 }
 
+void RuntimeApplication::register_runtime_probe() {
+    admin_->register_component("runtime_startup", [this] {
+        return ComponentHealth{
+            "runtime_startup",
+            !startup_failed_,
+            true,
+            startup_failed_ ? last_start_error_ : "runtime startup successful",
+        };
+    });
+}
+
 void RuntimeApplication::register_admin_probes() {
     admin_->clear_components();
+    register_runtime_probe();
     if (roles_.gateway) {
         admin_->register_lifecycle_probe("gateway", [this] { return gateway_.health_snapshot(); });
     }
@@ -133,6 +175,11 @@ void RuntimeApplication::register_admin_probes() {
         admin_->register_lifecycle_probe("matcher", [this] { return matching_.health_snapshot(); });
     }
     admin_->register_dependency_probe("event_bus", [] { return true; }, false);
+}
+
+void RuntimeApplication::register_startup_failure_probe() {
+    admin_->clear_components();
+    register_runtime_probe();
 }
 
 } // namespace signalroute

@@ -2,12 +2,15 @@
 
 #include <cassert>
 #include <iostream>
+#include <stdexcept>
+#include <string>
 
 namespace {
 
 signalroute::Config config_for_role(const std::string& role) {
     signalroute::Config config;
     config.server.role = role;
+    config.postgis.dsn = "host=localhost dbname=signalroute";
     config.geofence.eval_enabled = false;
     config.gateway.rate_limit_rps_per_device = 1000;
     config.gateway.timestamp_skew_tolerance_s = 60;
@@ -49,9 +52,10 @@ void test_query_runtime_registers_admin_probes_and_stops_cleanly() {
     auto health = app.admin().health();
     assert(health.healthy);
     assert(health.role == "query");
+    assert(health.component_healthy("runtime_startup"));
     assert(health.component_healthy("query"));
     assert(health.component_healthy("event_bus"));
-    assert(health.components.size() == 2);
+    assert(health.components.size() == 3);
 
     app.stop();
     assert(!app.is_running());
@@ -73,11 +77,39 @@ void test_gateway_runtime_registers_only_gateway_probe() {
 
     const auto health = app.admin().health();
     assert(health.healthy);
+    assert(health.component_healthy("runtime_startup"));
     assert(health.component_healthy("gateway"));
     assert(health.component_healthy("event_bus"));
-    assert(health.components.size() == 2);
+    assert(health.components.size() == 3);
 
     app.stop();
+}
+
+void test_runtime_startup_failure_is_reported_to_admin_health() {
+    signalroute::RuntimeApplication app;
+    bool thrown = false;
+    try {
+        app.start(config_for_role("worker"));
+    } catch (const std::runtime_error& ex) {
+        thrown = true;
+        const std::string message = ex.what();
+        assert(message.find("Runtime startup failed") != std::string::npos);
+        assert(message.find("server.role") != std::string::npos);
+    }
+
+    assert(thrown);
+    assert(!app.is_running());
+    assert(!app.is_healthy());
+    assert(!app.is_ready());
+    assert(app.startup_failed());
+    assert(app.last_start_error().find("server.role") != std::string::npos);
+
+    const auto health = app.admin().health();
+    assert(!health.healthy);
+    assert(health.role == "worker");
+    assert(!health.component_healthy("runtime_startup"));
+    assert(health.components.size() == 1);
+    assert(health.components.front().detail.find("server.role") != std::string::npos);
 }
 
 int main() {
@@ -85,6 +117,7 @@ int main() {
     test_role_selection_respects_role_and_geofence_flag();
     test_query_runtime_registers_admin_probes_and_stops_cleanly();
     test_gateway_runtime_registers_only_gateway_probe();
+    test_runtime_startup_failure_is_reported_to_admin_health();
     std::cout << "All runtime application tests passed.\n";
     return 0;
 }

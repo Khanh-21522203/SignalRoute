@@ -1,7 +1,7 @@
 # SignalRoute Dependency Strategy
 
 ## Purpose
-Batch 17 established the build contract for production dependencies without replacing the fallback runtime. Batch 18 added domain-to-wire conversion contracts. Batch 19 adds protobuf-only generated builds and keeps gRPC stubs optional because local gRPC packages may not be installed. Batch 32 keeps that contract and moves process startup into a dependency-free runtime application boundary.
+Batch 17 established the build contract for production dependencies without replacing the fallback runtime. Batch 18 added domain-to-wire conversion contracts. Batch 19 adds protobuf-only generated builds and keeps gRPC stubs optional because local gRPC packages may not be installed. Batch 33 keeps that contract while hardening dependency-free runtime startup validation and failure reporting.
 
 ## Default Build Mode
 The default build is fallback mode:
@@ -87,4 +87,4 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
 
 ## Current Boundary
-Batch 32 adds dependency-free runtime application composition for role selection, process-level admin lifecycle probes, health/readiness aggregation, and centralized graceful shutdown. Local fallback and protobuf builds pass. Package-backed configure checks are intentionally not rerun for normal feature batches until dependencies are installed or the batch touches that adapter path. gRPC service stubs remain gated by `SR_ENABLE_GRPC`.
+Batch 33 adds reusable post-load config validation, validates CLI/runtime role overrides before startup, and reports runtime startup failures through admin health. Local fallback and protobuf builds pass. Package-backed configure checks are intentionally not rerun for normal feature batches until dependencies are installed or the batch touches that adapter path. gRPC service stubs remain gated by `SR_ENABLE_GRPC`.

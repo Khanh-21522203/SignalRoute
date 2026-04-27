@@ -44,6 +44,7 @@ int main(int argc, char** argv) {
         config = signalroute::Config::load(config_path);
         if (!role_override.empty()) {
             config.server.role = role_override;
+            config.validate();
         }
     } catch (const std::exception& e) {
         std::cerr << "Failed to load config: " << e.what() << "\n";

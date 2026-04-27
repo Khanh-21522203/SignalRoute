@@ -25,7 +25,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Matching fallback service lifecycle, reservation flow, nearest strategy, deadlines, cleanup, typed matching events, and Kafka request/result loop over the shared matching payload codec.
 - Worker fallback `run_once` flows for H3 cleanup, DLQ replay, and metrics export; DLQ replay retries transient history-write failures and defers uncommitted messages after retry exhaustion.
 - Dependency-free admin health and metrics service for component health aggregation, service/dependency/lifecycle probe helpers, readiness snapshots, and Prometheus-text metrics snapshots.
-- Dependency-free runtime application composition root that owns role-specific services, registers process-level admin lifecycle probes, aggregates health/readiness, and centralizes graceful stop order.
+- Dependency-free runtime application composition root that owns role-specific services, validates post-load runtime config, registers process-level admin lifecycle probes, reports startup failures through admin health, aggregates health/readiness, and centralizes graceful stop order.
 - Fallback-first dependency build switches in `cmake/SignalRouteOptions.cmake` and central discovery/linking in `cmake/SignalRouteDependencies.cmake`.
 - Stable `signalroute_proto` target that is an interface target in fallback mode, a generated protobuf message library when `SR_ENABLE_PROTOBUF=ON`, and a generated gRPC stub library when `SR_ENABLE_GRPC=ON`.
 - Dependency-free domain-to-wire conversion contracts under `src/common/proto/` for location, query device state, geofence events, and matching request/result payloads.
@@ -165,6 +165,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task C1: Config Loader
 - **Ownership:** `src/common/config/`, config tests, config docs.
+- **Status:** Done fallback for TOML subset parsing, canonical config load, startup validation, and reusable post-load validation for CLI/runtime overrides.
 - **Goal:** Implement TOML parsing and validation.
 - **Items:** canonical config path, default values, required fields, role validation, topic naming consistency.
 - **Depends on:** none.
@@ -353,8 +354,8 @@ Make the skeleton clean, consistently named, and ready for parallel development.
 Finish the dependency-free domain core and configuration layer.
 
 ### Work Items
-- Implement TOML parsing in `Config::load`.
-- Validate required config fields at startup.
+- Implement TOML parsing in `Config::load`. (Done for the project TOML subset.)
+- Validate required config fields at startup. (Done for file load, CLI role overrides, and runtime application start.)
 - Add config defaulting rules and clear error messages.
 - Add protobuf-to-domain and domain-to-protobuf conversion boundaries.
 - Finalize internal domain types:

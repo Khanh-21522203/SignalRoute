@@ -130,6 +130,7 @@ public:
      * Missing keys fall back to the default values defined in each struct.
      */
     static Config load(const std::string& path);
+    void validate() const;
 
     ServerConfig        server;
     KafkaConfig         kafka;
