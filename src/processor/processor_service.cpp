@@ -38,6 +38,7 @@ void ProcessorService::start_with_bus(const Config& config, EventBus* external_b
     }
 
     std::cout << "[ProcessorService] Starting...\n";
+    lifecycle_state_.store(ServiceLifecycleState::Starting);
 
     should_stop_.store(false);
     if (external_bus == nullptr) {
@@ -83,6 +84,7 @@ void ProcessorService::start_with_bus(const Config& config, EventBus* external_b
         *event_bus_);
 
     running_ = true;
+    lifecycle_state_.store(ServiceLifecycleState::Ready);
     worker_ = std::thread([this] { processing_loop_->run(should_stop_); });
     std::cout << "[ProcessorService] Started.\n";
 }
@@ -93,6 +95,7 @@ void ProcessorService::stop() {
     }
 
     std::cout << "[ProcessorService] Stopping...\n";
+    lifecycle_state_.store(ServiceLifecycleState::Draining);
     should_stop_.store(true);
     if (worker_.joinable()) {
         worker_.join();
@@ -111,10 +114,26 @@ void ProcessorService::stop() {
     }
 
     running_ = false;
+    lifecycle_state_.store(ServiceLifecycleState::Stopped);
     std::cout << "[ProcessorService] Stopped.\n";
 }
 
 bool ProcessorService::is_healthy() const { return running_; }
+
+bool ProcessorService::is_ready() const {
+    return lifecycle_state_.load() == ServiceLifecycleState::Ready;
+}
+
+ServiceHealthSnapshot ProcessorService::health_snapshot() const {
+    switch (lifecycle_state_.load()) {
+        case ServiceLifecycleState::Ready: return ready_health("processor consuming events");
+        case ServiceLifecycleState::Starting: return starting_health("processor starting");
+        case ServiceLifecycleState::Draining: return draining_health("processor draining");
+        case ServiceLifecycleState::Failed: return failed_health("processor failed");
+        case ServiceLifecycleState::Stopped: return stopped_health("processor stopped");
+    }
+    return failed_health("processor unknown lifecycle state");
+}
 
 bool ProcessorService::is_event_driven() const {
     return event_bus_ != nullptr && processing_loop_ != nullptr;

@@ -34,6 +34,7 @@ void QueryService::start(const Config& config) {
     }
 
     std::cout << "[QueryService] Starting...\n";
+    lifecycle_state_.store(ServiceLifecycleState::Starting);
     device_ttl_s_ = config.redis.device_ttl_s;
     redis_ = std::make_unique<RedisClient>(config.redis);
     pg_ = std::make_unique<PostgresClient>(config.postgis);
@@ -42,6 +43,7 @@ void QueryService::start(const Config& config) {
     nearby_handler_ = std::make_unique<NearbyHandler>(*redis_, *h3_, config.spatial);
     trip_handler_ = std::make_unique<TripHandler>(*pg_);
     running_ = true;
+    lifecycle_state_.store(ServiceLifecycleState::Ready);
     std::cout << "[QueryService] Started.\n";
 }
 
@@ -51,6 +53,7 @@ void QueryService::stop() {
     }
 
     std::cout << "[QueryService] Stopping...\n";
+    lifecycle_state_.store(ServiceLifecycleState::Draining);
     running_ = false;
     trip_handler_.reset();
     nearby_handler_.reset();
@@ -58,10 +61,26 @@ void QueryService::stop() {
     h3_.reset();
     pg_.reset();
     redis_.reset();
+    lifecycle_state_.store(ServiceLifecycleState::Stopped);
     std::cout << "[QueryService] Stopped.\n";
 }
 
 bool QueryService::is_healthy() const { return running_; }
+
+bool QueryService::is_ready() const {
+    return lifecycle_state_.load() == ServiceLifecycleState::Ready;
+}
+
+ServiceHealthSnapshot QueryService::health_snapshot() const {
+    switch (lifecycle_state_.load()) {
+        case ServiceLifecycleState::Ready: return ready_health("query serving reads");
+        case ServiceLifecycleState::Starting: return starting_health("query starting");
+        case ServiceLifecycleState::Draining: return draining_health("query draining");
+        case ServiceLifecycleState::Failed: return failed_health("query failed");
+        case ServiceLifecycleState::Stopped: return stopped_health("query stopped");
+    }
+    return failed_health("query unknown lifecycle state");
+}
 
 std::optional<DeviceState> QueryService::latest(const std::string& device_id) {
     if (!running_ || !latest_handler_) {

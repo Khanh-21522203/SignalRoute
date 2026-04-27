@@ -180,6 +180,7 @@ void MatchingService::start_with_bus(const Config& config, EventBus* external_bu
     }
 
     std::cout << "[MatchingService] Starting...\n";
+    lifecycle_state_.store(ServiceLifecycleState::Starting);
     config_ = config;
     if (external_bus == nullptr) {
         owned_bus_ = std::make_unique<EventBus>();
@@ -202,11 +203,13 @@ void MatchingService::start_with_bus(const Config& config, EventBus* external_bu
         config.kafka,
         std::vector<std::string>{config.matching.request_topic});
     running_ = true;
+    lifecycle_state_.store(ServiceLifecycleState::Ready);
     std::cout << "[MatchingService] Started.\n";
 }
 
 void MatchingService::stop() {
     std::cout << "[MatchingService] Stopping...\n";
+    lifecycle_state_.store(ServiceLifecycleState::Draining);
     running_ = false;
     request_consumer_.reset();
     result_producer_.reset();
@@ -215,10 +218,26 @@ void MatchingService::stop() {
     h3_.reset();
     redis_.reset();
     strategy_.reset();
+    lifecycle_state_.store(ServiceLifecycleState::Stopped);
     std::cout << "[MatchingService] Stopped.\n";
 }
 
 bool MatchingService::is_healthy() const { return running_; }
+
+bool MatchingService::is_ready() const {
+    return lifecycle_state_.load() == ServiceLifecycleState::Ready;
+}
+
+ServiceHealthSnapshot MatchingService::health_snapshot() const {
+    switch (lifecycle_state_.load()) {
+        case ServiceLifecycleState::Ready: return ready_health("matching serving requests");
+        case ServiceLifecycleState::Starting: return starting_health("matching starting");
+        case ServiceLifecycleState::Draining: return draining_health("matching draining");
+        case ServiceLifecycleState::Failed: return failed_health("matching failed");
+        case ServiceLifecycleState::Stopped: return stopped_health("matching stopped");
+    }
+    return failed_health("matching unknown lifecycle state");
+}
 
 const std::string& MatchingService::strategy_name() const {
     return strategy_name_;

@@ -210,6 +210,31 @@ void test_transport_ingest_batch_preserves_batch_validation() {
     assert(!consumer.poll(0).has_value());
 }
 
+void test_gateway_readiness_tracks_lifecycle() {
+    const auto topic = topic_name("readiness");
+    auto config = config_for_topic(topic);
+    signalroute::GatewayService gateway;
+
+    auto snapshot = gateway.health_snapshot();
+    assert(!gateway.is_ready());
+    assert(!snapshot.live);
+    assert(!snapshot.ready);
+
+    gateway.start(config);
+    snapshot = gateway.health_snapshot();
+    assert(gateway.is_ready());
+    assert(snapshot.live);
+    assert(snapshot.ready);
+    assert(snapshot.state == signalroute::ServiceLifecycleState::Ready);
+
+    gateway.stop();
+    snapshot = gateway.health_snapshot();
+    assert(!gateway.is_ready());
+    assert(!snapshot.live);
+    assert(!snapshot.ready);
+    assert(snapshot.state == signalroute::ServiceLifecycleState::Stopped);
+}
+
 int main() {
     std::cout << "test_gateway_service:\n";
     test_ingest_one_validates_stamps_publishes_and_emits_event();
@@ -218,6 +243,7 @@ int main() {
     test_ingest_batch_reports_received_and_rejects_oversized_batch();
     test_transport_ingest_one_returns_stamped_response();
     test_transport_ingest_batch_preserves_batch_validation();
+    test_gateway_readiness_tracks_lifecycle();
     std::cout << "All gateway service tests passed.\n";
     return 0;
 }

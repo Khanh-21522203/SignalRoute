@@ -169,6 +169,28 @@ void test_query_transport_trip_responses() {
     assert(invalid.error == "device_id is required");
 }
 
+void test_query_readiness_tracks_lifecycle() {
+    signalroute::QueryService service;
+
+    auto snapshot = service.health_snapshot();
+    assert(!service.is_ready());
+    assert(snapshot.state == signalroute::ServiceLifecycleState::Stopped);
+    assert(!snapshot.live);
+    assert(!snapshot.ready);
+
+    service.start(query_config());
+    snapshot = service.health_snapshot();
+    assert(service.is_ready());
+    assert(snapshot.state == signalroute::ServiceLifecycleState::Ready);
+    assert(snapshot.live);
+    assert(snapshot.ready);
+
+    service.stop();
+    snapshot = service.health_snapshot();
+    assert(!service.is_ready());
+    assert(snapshot.state == signalroute::ServiceLifecycleState::Stopped);
+}
+
 int main() {
     std::cout << "test_query_service:\n";
     test_query_service_latest_and_nearby_paths();
@@ -176,6 +198,7 @@ int main() {
     test_query_service_returns_empty_when_stopped_or_invalid();
     test_query_transport_latest_and_nearby_responses();
     test_query_transport_trip_responses();
+    test_query_readiness_tracks_lifecycle();
     std::cout << "All query service tests passed.\n";
     return 0;
 }

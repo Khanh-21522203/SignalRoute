@@ -50,6 +50,22 @@ void AdminService::register_dependency_probe(std::string name, BooleanProbe prob
     });
 }
 
+void AdminService::register_lifecycle_probe(
+    std::string name,
+    std::function<ServiceHealthSnapshot()> probe,
+    bool required) {
+    const std::string component_name = std::move(name);
+    register_component(component_name, [component_name, probe = std::move(probe), required] {
+        const auto snapshot = probe ? probe() : stopped_health("lifecycle probe missing");
+        return ComponentHealth{
+            component_name,
+            snapshot.live,
+            required,
+            std::string(lifecycle_state_to_string(snapshot.state)) + ": " + snapshot.detail,
+        };
+    });
+}
+
 void AdminService::clear_components() {
     components_.clear();
 }

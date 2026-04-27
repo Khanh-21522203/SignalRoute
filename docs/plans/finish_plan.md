@@ -24,7 +24,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Geofence fallback evaluation for enter, exit, old-cell exit, dwell, audit, and event publication.
 - Matching fallback service lifecycle, reservation flow, nearest strategy, deadlines, cleanup, typed matching events, and Kafka request/result loop over the shared matching payload codec.
 - Worker fallback `run_once` flows for H3 cleanup, DLQ replay, and metrics export; DLQ replay retries transient history-write failures and defers uncommitted messages after retry exhaustion.
-- Dependency-free admin health and metrics service for component health aggregation, service/dependency probe helpers, and Prometheus-text metrics snapshots.
+- Dependency-free admin health and metrics service for component health aggregation, service/dependency/lifecycle probe helpers, readiness snapshots, and Prometheus-text metrics snapshots.
 - Fallback-first dependency build switches in `cmake/SignalRouteOptions.cmake` and central discovery/linking in `cmake/SignalRouteDependencies.cmake`.
 - Stable `signalroute_proto` target that is an interface target in fallback mode, a generated protobuf message library when `SR_ENABLE_PROTOBUF=ON`, and a generated gRPC stub library when `SR_ENABLE_GRPC=ON`.
 - Dependency-free domain-to-wire conversion contracts under `src/common/proto/` for location, query device state, geofence events, and matching request/result payloads.
@@ -34,8 +34,8 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Kafka, Redis, PostGIS, gRPC, real H3, and Prometheus still need package-backed integration verification. Protobuf message generation is optional and integrated behind `SR_ENABLE_PROTOBUF`.
 - Production dependency switches exist; Kafka, Redis, H3, and PostGIS now have gated adapter paths behind existing interfaces, but package-backed compile/runtime verification is pending where local packages are unavailable.
 - Gateway, processor, geofence, matching codec, and DLQ replay boundaries now use shared payload codecs that emit protobuf when `SR_ENABLE_PROTOBUF=ON` and preserve CSV fallback decoding for skeleton tests. Real Kafka transport is still pending.
-- Gateway has dependency-free transport handler methods but does not expose real gRPC/UDP endpoints yet.
-- Query service has dependency-free transport handler methods but does not expose real gRPC/HTTP endpoints yet.
+- Gateway has dependency-free transport handler methods and readiness/lifecycle snapshots but does not expose real gRPC/UDP endpoints yet.
+- Query service has dependency-free transport handler methods and readiness/lifecycle snapshots but does not expose real gRPC/HTTP endpoints yet.
 - Event bus wiring is implemented for the processor/geofence/metrics fallback path, but cross-role production deployment still needs explicit durable Kafka/protobuf boundaries.
 - Geofence fallback flows and matching Kafka fallback request/result flow are implemented; production adapters, real endpoint transports, admin gRPC binding, and admin CRUD are still pending.
 
@@ -299,7 +299,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task N1: Observability And Admin
 - **Ownership:** `src/common/metrics/`, `src/common/admin/`, admin proto/service, observability tests.
-- **Status:** Dependency-free admin health aggregation, service/dependency probe helpers, and metrics snapshot service added; Prometheus exporter, gRPC binding, and readiness policy pending.
+- **Status:** Dependency-free admin health aggregation, service/dependency/lifecycle probe helpers, readiness snapshots, and metrics snapshot service added; Prometheus exporter, gRPC binding, and process-level probe registration pending.
 - **Goal:** Complete metrics, health, readiness, and admin APIs.
 - **Items:** Prometheus exporter, health aggregation, component status events, admin service.
 - **Depends on:** A1/A2, C2.
@@ -738,6 +738,7 @@ Implement background operational jobs and observability.
 - Add structured logging.
 - Add graceful shutdown for all services.
 - Add readiness/liveness semantics.
+  - Status: common lifecycle snapshots and service readiness APIs added; process-level registration pending.
 - Add resource limit configuration.
 
 ### Acceptance Criteria

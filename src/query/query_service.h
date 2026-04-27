@@ -10,6 +10,7 @@
  */
 
 #include "../common/config/config.h"
+#include "../common/admin/lifecycle.h"
 #include "../common/types/device_state.h"
 #include "../common/types/location_event.h"
 #include "nearby_handler.h"
@@ -88,6 +89,8 @@ public:
     void start(const Config& config);
     void stop();
     bool is_healthy() const;
+    bool is_ready() const;
+    ServiceHealthSnapshot health_snapshot() const;
 
     std::optional<DeviceState> latest(const std::string& device_id);
     NearbyResult nearby(double lat, double lon, double radius_m, int limit, int last_seen_s);
@@ -117,6 +120,7 @@ public:
 
 private:
     std::atomic<bool> running_{false};
+    std::atomic<ServiceLifecycleState> lifecycle_state_{ServiceLifecycleState::Stopped};
     std::unique_ptr<RedisClient> redis_;
     std::unique_ptr<PostgresClient> pg_;
     std::unique_ptr<H3Index> h3_;

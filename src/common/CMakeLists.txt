@@ -4,6 +4,7 @@
 
 add_library(sr_common STATIC
     admin/admin_service.cpp
+    admin/lifecycle.cpp
     config/config.cpp
     spatial/h3_index.cpp
     spatial/haversine.cpp

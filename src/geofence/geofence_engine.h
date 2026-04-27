@@ -13,6 +13,7 @@
  */
 
 #include "../common/config/config.h"
+#include "../common/admin/lifecycle.h"
 #include <atomic>
 #include <cstddef>
 #include <memory>
@@ -38,6 +39,8 @@ public:
     void start(const Config& config, EventBus& event_bus);
     void stop();
     bool is_healthy() const;
+    bool is_ready() const;
+    ServiceHealthSnapshot health_snapshot() const;
     bool is_event_driven() const;
     std::size_t subscription_count() const;
     std::size_t fence_count() const;
@@ -48,6 +51,7 @@ private:
     void start_with_bus(const Config& config, EventBus* external_bus);
 
     std::atomic<bool> running_{false};
+    std::atomic<ServiceLifecycleState> lifecycle_state_{ServiceLifecycleState::Stopped};
     std::unique_ptr<EventBus> owned_bus_;
     EventBus* event_bus_ = nullptr;
 

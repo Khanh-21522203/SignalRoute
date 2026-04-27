@@ -21,6 +21,7 @@
  */
 
 #include "../common/config/config.h"
+#include "../common/admin/lifecycle.h"
 #include "../common/types/location_event.h"
 #include "../common/types/result.h"
 #include <memory>
@@ -96,6 +97,8 @@ public:
 
     /// Health check.
     bool is_healthy() const;
+    bool is_ready() const;
+    ServiceHealthSnapshot health_snapshot() const;
     bool is_event_driven() const;
 
     Result<LocationEvent, std::string> ingest_one(LocationEvent event);
@@ -109,6 +112,7 @@ private:
     void start_with_bus(const Config& config, EventBus* external_bus);
 
     std::atomic<bool> running_{false};
+    std::atomic<ServiceLifecycleState> lifecycle_state_{ServiceLifecycleState::Stopped};
     Config config_;
     std::unique_ptr<EventBus> owned_bus_;
     EventBus* event_bus_ = nullptr;

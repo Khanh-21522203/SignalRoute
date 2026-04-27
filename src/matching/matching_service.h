@@ -13,6 +13,7 @@
  */
 
 #include "../common/config/config.h"
+#include "../common/admin/lifecycle.h"
 #include "../common/types/device_state.h"
 #include "matching_types.h"
 
@@ -50,6 +51,8 @@ public:
     void start(const Config& config, EventBus& event_bus);
     void stop();
     bool is_healthy() const;
+    bool is_ready() const;
+    ServiceHealthSnapshot health_snapshot() const;
     const std::string& strategy_name() const;
 
     MatchResult match_once(const MatchRequest& request,
@@ -69,6 +72,7 @@ private:
     void start_with_bus(const Config& config, EventBus* external_bus);
 
     std::atomic<bool> running_{false};
+    std::atomic<ServiceLifecycleState> lifecycle_state_{ServiceLifecycleState::Stopped};
     Config config_;
     std::unique_ptr<IMatchStrategy> strategy_;
     std::string strategy_name_;

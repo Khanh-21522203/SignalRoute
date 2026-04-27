@@ -87,4 +87,4 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
 
 ## Current Boundary
-Batch 30 adds service/dependency admin probe helpers and DLQ replay retry/backoff classification while preserving fallback runtime behavior. Local fallback and protobuf builds pass. Package-backed configure checks are intentionally not rerun for normal feature batches until dependencies are installed or the batch touches that adapter path. gRPC service stubs remain gated by `SR_ENABLE_GRPC`.
+Batch 31 adds dependency-free lifecycle/readiness snapshots and admin lifecycle probes while preserving fallback runtime behavior. Local fallback and protobuf builds pass. Package-backed configure checks are intentionally not rerun for normal feature batches until dependencies are installed or the batch touches that adapter path. gRPC service stubs remain gated by `SR_ENABLE_GRPC`.

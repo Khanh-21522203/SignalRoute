@@ -38,6 +38,7 @@ void GatewayService::start_with_bus(const Config& config, EventBus* external_bus
     }
 
     std::cout << "[GatewayService] Starting...\n";
+    lifecycle_state_.store(ServiceLifecycleState::Starting);
     config_ = config;
     if (external_bus == nullptr) {
         owned_bus_ = std::make_unique<EventBus>();
@@ -51,6 +52,7 @@ void GatewayService::start_with_bus(const Config& config, EventBus* external_bus
     validator_ = std::make_unique<Validator>(config.gateway);
     rate_limiter_ = std::make_unique<RateLimiter>(config.gateway.rate_limit_rps_per_device);
     running_ = true;
+    lifecycle_state_.store(ServiceLifecycleState::Ready);
     // gRPC/UDP servers are integrated in the transport dependency milestone.
     std::cout << "[GatewayService] Started.\n";
 }
@@ -61,15 +63,32 @@ void GatewayService::stop() {
     }
 
     std::cout << "[GatewayService] Stopping...\n";
+    lifecycle_state_.store(ServiceLifecycleState::Draining);
     if (producer_) {
         producer_->flush(5000);
     }
     running_ = false;
+    lifecycle_state_.store(ServiceLifecycleState::Stopped);
     std::cout << "[GatewayService] Stopped.\n";
 }
 
 bool GatewayService::is_healthy() const {
     return running_;
+}
+
+bool GatewayService::is_ready() const {
+    return lifecycle_state_.load() == ServiceLifecycleState::Ready;
+}
+
+ServiceHealthSnapshot GatewayService::health_snapshot() const {
+    switch (lifecycle_state_.load()) {
+        case ServiceLifecycleState::Ready: return ready_health("gateway accepting ingest");
+        case ServiceLifecycleState::Starting: return starting_health("gateway starting");
+        case ServiceLifecycleState::Draining: return draining_health("gateway draining");
+        case ServiceLifecycleState::Failed: return failed_health("gateway failed");
+        case ServiceLifecycleState::Stopped: return stopped_health("gateway stopped");
+    }
+    return failed_health("gateway unknown lifecycle state");
 }
 
 bool GatewayService::is_event_driven() const {

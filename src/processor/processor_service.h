@@ -15,6 +15,7 @@
  */
 
 #include "../common/config/config.h"
+#include "../common/admin/lifecycle.h"
 #include "../common/types/device_state.h"
 #include <memory>
 #include <atomic>
@@ -60,6 +61,8 @@ public:
 
     void stop();
     bool is_healthy() const;
+    bool is_ready() const;
+    ServiceHealthSnapshot health_snapshot() const;
     bool is_event_driven() const;
     std::size_t subscription_count() const;
 
@@ -71,6 +74,7 @@ private:
 
     std::atomic<bool> running_{false};
     std::atomic<bool> should_stop_{false};
+    std::atomic<ServiceLifecycleState> lifecycle_state_{ServiceLifecycleState::Stopped};
 
     std::unique_ptr<EventBus> owned_bus_;
     EventBus* event_bus_ = nullptr;
