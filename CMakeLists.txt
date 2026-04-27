@@ -34,19 +34,14 @@ add_subdirectory(src/query)
 add_subdirectory(src/geofence)
 add_subdirectory(src/matching)
 add_subdirectory(src/workers)
+add_subdirectory(src/runtime)
 
 # ────────────────────────────────────────────
 # Main executable
 # ────────────────────────────────────────────
 add_executable(signalroute src/main.cpp)
 target_link_libraries(signalroute PRIVATE
-    sr_common
-    sr_gateway
-    sr_processor
-    sr_query
-    sr_geofence
-    sr_matching
-    sr_workers
+    sr_runtime
 )
 
 # ────────────────────────────────────────────
