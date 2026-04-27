@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <iostream>
 #include <optional>
 #include <string>
+#include <thread>
 #include <unordered_set>
 #include <vector>
 
@@ -129,6 +131,31 @@ void test_agent_reservation_release_requires_matching_request_id() {
     assert(redis.try_reserve_agent("agent-1", "request-2", 5000));
 }
 
+void test_agent_reservation_expires() {
+    signalroute::RedisClient redis(signalroute::RedisConfig{});
+
+    assert(redis.try_reserve_agent("agent-1", "request-1", 1));
+    std::this_thread::sleep_for(std::chrono::milliseconds(3));
+    assert(!redis.is_agent_reserved("agent-1"));
+    assert(!redis.get_agent_reservation_holder("agent-1").has_value());
+    assert(redis.try_reserve_agent("agent-1", "request-2", 5000));
+}
+
+void test_stale_cell_cleanup_removes_orphan_members() {
+    signalroute::RedisClient redis(signalroute::RedisConfig{});
+
+    assert(redis.update_device_state_cas("dev-live", make_state("dev-live", 1, 100), 3600));
+    redis.add_device_to_cell(100, "dev-orphan");
+    redis.add_device_to_cell(200, "dev-other-orphan");
+
+    const auto [removed, touched] = redis.remove_stale_cell_members();
+
+    assert(removed == 2);
+    assert(touched == 2);
+    assert_contains_exactly(redis.get_devices_in_cell(100), {"dev-live"});
+    assert(redis.get_devices_in_cell(200).empty());
+}
+
 int main() {
     std::cout << "test_redis_client:\n";
     test_ping_returns_true();
@@ -138,6 +165,8 @@ int main() {
     test_get_devices_in_cells_returns_unique_device_ids();
     test_fence_state_set_get();
     test_agent_reservation_release_requires_matching_request_id();
+    test_agent_reservation_expires();
+    test_stale_cell_cleanup_removes_orphan_members();
     std::cout << "All RedisClient fallback tests passed.\n";
     return 0;
 }

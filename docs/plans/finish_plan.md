@@ -15,7 +15,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Header-only typed in-process `EventBus` with gateway, location, state, history, geofence, matching, worker, and metrics-facing payloads.
 - CTest wiring for independent unit executables.
 - In-memory Kafka producer/consumer fallback with produce, poll, commit, callback, and lag behavior; optional librdkafka++ adapter code is gated behind `SR_ENABLE_REAL_KAFKA`.
-- Redis fallback behavior for device state, H3 cell membership, fence state, reservations, TTL expiry, and stale H3 cleanup.
+- Redis fallback behavior for device state, H3 cell membership, fence state, reservations, TTL expiry, and stale H3 cleanup; optional redis-plus-plus adapter path is gated behind `SR_ENABLE_REAL_REDIS`.
 - PostGIS fallback behavior for trip history, spatial trip filters, geofence rules, and geofence audit records.
 - Processor fallback flow with dedup, sequence guard, state/history fan-out, offset commits, and shared location payload decoding that uses protobuf when enabled and CSV as fallback.
 - In-process observer-style composition for processor -> state/history -> geofence -> metrics.
@@ -413,7 +413,7 @@ Replace the deterministic local grid fallback with real H3 while preserving the 
 ## Milestone 4: Redis State Store
 
 ### Goal
-Implement production Redis adapter for latest state, H3 cell index, fence state, and matching reservations.
+Implement production Redis adapter for latest state, H3 cell index, fence state, and matching reservations. The optional adapter path is present behind `SR_ENABLE_REAL_REDIS`; package-backed compile/run verification remains pending locally.
 
 ### Work Items
 - Choose Redis C++ client and connection pooling strategy.

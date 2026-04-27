@@ -24,6 +24,7 @@
 #include <optional>
 #include <cstdint>
 #include <mutex>
+#include <memory>
 #include <utility>
 #include <unordered_map>
 #include <unordered_set>
@@ -183,12 +184,15 @@ public:
     std::optional<std::string> get_agent_reservation_holder(const std::string& agent_id) const;
 
 private:
+    struct Impl;
+
     struct ReservationRecord {
         std::string request_id;
         int64_t expires_at_ms = 0;
     };
 
     RedisConfig config_;
+    std::unique_ptr<Impl> impl_;
 
     mutable std::mutex mu_;
     std::unordered_map<std::string, DeviceState> device_states_;
