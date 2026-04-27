@@ -23,8 +23,8 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Query fallback service lifecycle for latest, nearby, trip, and spatial trip reads, plus dependency-free transport-facing request/response handlers for those query paths.
 - Geofence fallback evaluation for enter, exit, old-cell exit, dwell, audit, and event publication.
 - Matching fallback service lifecycle, reservation flow, nearest strategy, deadlines, cleanup, typed matching events, and Kafka request/result loop over the shared matching payload codec.
-- Worker fallback `run_once` flows for H3 cleanup, DLQ replay, and metrics export.
-- Dependency-free admin health and metrics service for component health aggregation and Prometheus-text metrics snapshots.
+- Worker fallback `run_once` flows for H3 cleanup, DLQ replay, and metrics export; DLQ replay retries transient history-write failures and defers uncommitted messages after retry exhaustion.
+- Dependency-free admin health and metrics service for component health aggregation, service/dependency probe helpers, and Prometheus-text metrics snapshots.
 - Fallback-first dependency build switches in `cmake/SignalRouteOptions.cmake` and central discovery/linking in `cmake/SignalRouteDependencies.cmake`.
 - Stable `signalroute_proto` target that is an interface target in fallback mode, a generated protobuf message library when `SR_ENABLE_PROTOBUF=ON`, and a generated gRPC stub library when `SR_ENABLE_GRPC=ON`.
 - Dependency-free domain-to-wire conversion contracts under `src/common/proto/` for location, query device state, geofence events, and matching request/result payloads.
@@ -290,15 +290,16 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task M1: Workers
 - **Ownership:** `src/workers/`, worker tests.
-- **Status:** Done fallback; DLQ replay decodes shared location payloads, including protobuf when enabled; production retry/backoff and external dependency integration pending.
+- **Status:** Done fallback; DLQ replay decodes shared location payloads, including protobuf when enabled, retries history-write failures, and defers uncommitted messages after retry exhaustion; external dependency integration pending.
 - **Goal:** Complete cleanup, DLQ replay, and metrics worker behavior.
 - **Items:** H3 cleanup, DLQ replay, retry/backoff, event publication.
+  - Done fallback: DLQ replay retry/backoff classification for invalid payload vs history-write failure.
 - **Depends on:** A1/A2, E1, F1, G1.
 - **Verification:** worker tests.
 
 ### Agent Task N1: Observability And Admin
 - **Ownership:** `src/common/metrics/`, `src/common/admin/`, admin proto/service, observability tests.
-- **Status:** Dependency-free admin health aggregation and metrics snapshot service added; Prometheus exporter, gRPC binding, and readiness policy pending.
+- **Status:** Dependency-free admin health aggregation, service/dependency probe helpers, and metrics snapshot service added; Prometheus exporter, gRPC binding, and readiness policy pending.
 - **Goal:** Complete metrics, health, readiness, and admin APIs.
 - **Items:** Prometheus exporter, health aggregation, component status events, admin service.
 - **Depends on:** A1/A2, C2.
@@ -733,7 +734,7 @@ Implement background operational jobs and observability.
 - Implement DLQ replay worker.
 - Implement metrics reporter or direct Prometheus exposer.
 - Implement admin health service.
-  - Status: dependency-free health aggregation and metrics snapshot service added; endpoint binding pending.
+  - Status: dependency-free health aggregation, service/dependency probe helpers, and metrics snapshot service added; endpoint binding pending.
 - Add structured logging.
 - Add graceful shutdown for all services.
 - Add readiness/liveness semantics.

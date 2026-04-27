@@ -24,6 +24,32 @@ void AdminService::register_component(std::string name, ComponentProbe probe) {
     components_.push_back(RegisteredComponent{std::move(name), std::move(probe)});
 }
 
+void AdminService::register_service_probe(std::string name, BooleanProbe probe, bool required) {
+    const std::string component_name = std::move(name);
+    register_component(component_name, [component_name, probe = std::move(probe), required] {
+        const bool healthy = probe && probe();
+        return ComponentHealth{
+            component_name,
+            healthy,
+            required,
+            healthy ? "service healthy" : "service unhealthy",
+        };
+    });
+}
+
+void AdminService::register_dependency_probe(std::string name, BooleanProbe probe, bool required) {
+    const std::string component_name = std::move(name);
+    register_component(component_name, [component_name, probe = std::move(probe), required] {
+        const bool healthy = probe && probe();
+        return ComponentHealth{
+            component_name,
+            healthy,
+            required,
+            healthy ? "dependency reachable" : "dependency unreachable",
+        };
+    });
+}
+
 void AdminService::clear_components() {
     components_.clear();
 }

@@ -57,6 +57,27 @@ void test_probe_exception_is_reported_as_unhealthy_component() {
     assert(health.components.front().detail == "connection refused");
 }
 
+void test_service_and_dependency_probe_helpers() {
+    bool gateway_running = true;
+    bool redis_reachable = false;
+    signalroute::AdminService admin("standalone");
+
+    admin.register_service_probe("gateway", [&] { return gateway_running; });
+    admin.register_dependency_probe("redis", [&] { return redis_reachable; }, false);
+
+    auto health = admin.health();
+    assert(health.healthy);
+    assert(health.component_healthy("gateway"));
+    assert(!health.component_healthy("redis"));
+    assert(health.components[0].detail == "service healthy");
+    assert(health.components[1].detail == "dependency unreachable");
+
+    gateway_running = false;
+    health = admin.health();
+    assert(!health.healthy);
+    assert(!health.component_healthy("gateway"));
+}
+
 void test_metrics_response_exports_prometheus_text() {
     auto& metrics = signalroute::Metrics::instance();
     metrics.reset_for_test();
@@ -74,6 +95,7 @@ int main() {
     test_health_reports_registered_components();
     test_required_component_failure_marks_service_unhealthy();
     test_probe_exception_is_reported_as_unhealthy_component();
+    test_service_and_dependency_probe_helpers();
     test_metrics_response_exports_prometheus_text();
     std::cout << "All admin service tests passed.\n";
     return 0;

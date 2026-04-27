@@ -38,10 +38,13 @@ struct MetricsResponse {
 class AdminService {
 public:
     using ComponentProbe = std::function<ComponentHealth()>;
+    using BooleanProbe = std::function<bool()>;
 
     AdminService(std::string role, std::string version = "0.1.0");
 
     void register_component(std::string name, ComponentProbe probe);
+    void register_service_probe(std::string name, BooleanProbe probe, bool required = true);
+    void register_dependency_probe(std::string name, BooleanProbe probe, bool required = true);
     void clear_components();
 
     [[nodiscard]] HealthResponse health(const HealthRequest& request = {}) const;
