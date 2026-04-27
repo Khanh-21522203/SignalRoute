@@ -29,6 +29,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Dependency-free structured logfmt event formatter used by process startup, shutdown, unhealthy, and fatal paths.
 - Fallback-first dependency build switches in `cmake/SignalRouteOptions.cmake` and central discovery/linking in `cmake/SignalRouteDependencies.cmake`.
 - Stable `signalroute_proto` target that is an interface target in fallback mode, a generated protobuf message library when `SR_ENABLE_PROTOBUF=ON`, and a generated gRPC stub library when `SR_ENABLE_GRPC=ON`.
+- Gated `sr_grpc_transport` adapter target for admin, gateway ingest, and query services; it only compiles when `SR_ENABLE_GRPC=ON`.
 - Dependency-free domain-to-wire conversion contracts under `src/common/proto/` for location, query device state, geofence events, and matching request/result payloads.
 - Protobuf package namespace is `signalroute.v1`, so generated C++ types live under `signalroute::v1` and do not collide with domain types under `signalroute`.
 
@@ -36,10 +37,10 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Kafka, Redis, PostGIS, gRPC, real H3, and Prometheus still need package-backed integration verification. Protobuf message generation is optional and integrated behind `SR_ENABLE_PROTOBUF`.
 - Production dependency switches exist; Kafka, Redis, H3, and PostGIS now have gated adapter paths behind existing interfaces, but package-backed compile/runtime verification is pending where local packages are unavailable.
 - Gateway, processor, geofence, matching codec, and DLQ replay boundaries now use shared payload codecs that emit protobuf when `SR_ENABLE_PROTOBUF=ON` and preserve CSV fallback decoding for skeleton tests. Real Kafka broker-backed transport verification is still pending.
-- Gateway has dependency-free transport handler methods and readiness/lifecycle snapshots but does not expose real gRPC/UDP endpoints yet.
-- Query service has dependency-free transport handler methods and readiness/lifecycle snapshots but does not expose real gRPC/HTTP endpoints yet.
+- Gateway has dependency-free transport handler methods, readiness/lifecycle snapshots, and a gated gRPC adapter skeleton; real server binding and UDP endpoint remain pending.
+- Query service has dependency-free transport handler methods, readiness/lifecycle snapshots, and a gated gRPC adapter skeleton; real server binding and HTTP endpoint remain pending.
 - Event bus wiring is implemented for the processor/geofence/metrics fallback path, and process startup now owns role-specific services through `RuntimeApplication`. Cross-role production deployment still needs explicit durable Kafka/protobuf boundaries.
-- Geofence fallback flows and matching Kafka fallback request/result flow are implemented; production adapters, real endpoint transports, admin gRPC binding, and admin CRUD are still pending.
+- Geofence fallback flows and matching Kafka fallback request/result flow are implemented; production adapters, real endpoint transports, and admin CRUD are still pending. Admin has a gated gRPC adapter skeleton, but real server binding remains pending.
 
 ## Engineering Rules
 - Keep tests grouped by feature/function: `test_dedup_window`, `test_state_writer`, `test_nearby_handler`, `test_geofence_evaluator`, etc.
@@ -235,8 +236,8 @@ Use this section when running multiple agents. Each task is intentionally scoped
 - **Verification:** Kafka integration tests.
 
 ### Agent Task G2: Protobuf Generation And Conversion
-- **Ownership:** `proto/`, generated build wiring, conversion tests.
-- **Status:** Conversion contracts, generated protobuf adapters, generated message round-trip tests, Kafka fallback protobuf payload round-trip tests, gateway/processor runtime protobuf location payloads, geofence runtime event payloads, matching request/result payload codecs, and DLQ replay protobuf location decoding done; generated gRPC stubs pending.
+- **Ownership:** `proto/`, generated build wiring, conversion tests, `src/transport/grpc/`.
+- **Status:** Conversion contracts, generated protobuf adapters, generated message round-trip tests, Kafka fallback protobuf payload round-trip tests, gateway/processor runtime protobuf location payloads, geofence runtime event payloads, matching request/result payload codecs, DLQ replay protobuf location decoding, and gated admin/gateway/query gRPC adapter skeletons done; package-backed gRPC compile verification pending until gRPC is installed.
 - **Goal:** Enable protobuf/gRPC generation and domain conversion.
 - **Items:** CMake generation, proto library, conversion helpers, serialization tests.
 - **Depends on:** C2.
@@ -244,7 +245,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task H1: Gateway Service
 - **Ownership:** `src/gateway/`, gateway tests.
-- **Status:** Done fallback for direct ingest methods and dependency-free transport-facing request/response handlers; gateway runtime emits protobuf location payloads when `SR_ENABLE_PROTOBUF=ON` and CSV in default fallback builds; real gRPC/UDP endpoint binding pending.
+- **Status:** Done fallback for direct ingest methods and dependency-free transport-facing request/response handlers; gateway runtime emits protobuf location payloads when `SR_ENABLE_PROTOBUF=ON` and CSV in default fallback builds; gated gRPC adapter skeleton added; real gRPC server binding and UDP endpoint pending.
 - **Goal:** Implement gRPC/UDP ingestion and event publication.
 - **Items:** service handlers, validation, rate limiting, server timestamp, Kafka publish, in-process event publish for standalone mode.
 - **Depends on:** A1/A2, G1/G2.
@@ -261,7 +262,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task J1: Query Transport
 - **Ownership:** `src/query/query_service.*`, query proto handlers/tests.
-- **Status:** Handler/service fallback and dependency-free transport-facing request/response handlers done; real gRPC/HTTP endpoint binding pending.
+- **Status:** Handler/service fallback, dependency-free transport-facing request/response handlers, and gated gRPC adapter skeleton done; real gRPC server binding and HTTP endpoint pending.
 - **Goal:** Expose latest, nearby, and trip APIs.
 - **Items:** gRPC service implementation, response mapping, validation, error mapping, streaming decision.
 - **Depends on:** G2, D2, F1.
@@ -302,7 +303,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task N1: Observability And Admin
 - **Ownership:** `src/common/metrics/`, `src/common/admin/`, admin proto/service, observability tests.
-- **Status:** Dependency-free admin health aggregation, service/dependency/lifecycle probe helpers, readiness snapshots, and metrics snapshot service added; Prometheus exporter, gRPC binding, and process-level probe registration pending.
+- **Status:** Dependency-free admin health aggregation, service/dependency/lifecycle probe helpers, readiness snapshots, metrics snapshot service, transport-neutral endpoint handler, process-level probe registration, and gated gRPC adapter skeleton added; Prometheus exporter and real gRPC server binding pending.
 - **Goal:** Complete metrics, health, readiness, and admin APIs.
 - **Items:** Prometheus exporter, health aggregation, component status events, admin service.
 - **Depends on:** A1/A2, C2.
@@ -500,7 +501,7 @@ Implement durable messaging and generated protobuf contracts.
 Shared payload codecs now cover location, geofence events, matching request/result messages, and DLQ location replay. CSV remains only as fallback-build scaffolding and protobuf-build decoder compatibility. This milestone must still replace the in-memory Kafka fallback with real durable Kafka transport and keep domain code independent of generated protobuf types.
 
 ### Work Items
-- Enable protobuf and gRPC generation in CMake.
+- Enable protobuf and gRPC generation in CMake. (Done for generated protobuf and gated gRPC stubs; local gRPC package availability still required.)
 - Link generated proto library to relevant modules.
 - Implement Kafka producer wrapper:
   - topic/key/payload produce (fallback done; librdkafka++ adapter path added)
@@ -542,8 +543,8 @@ Shared payload codecs now cover location, geofence events, matching request/resu
 Expose real device ingestion through gRPC and UDP, then publish validated events to Kafka.
 
 ### Work Items
-- Implement gRPC `IngestService`.
-- Implement `IngestSingle` and `IngestBatch` handlers.
+- Implement gRPC `IngestService`. (Gated adapter skeleton done; real server binding pending.)
+- Implement `IngestSingle` and `IngestBatch` handlers. (Transport-neutral handlers and gRPC adapter mapping done.)
 - Validate required fields, coordinates, sequence, timestamp, accuracy, and batch size.
 - Implement API key/auth placeholder or final auth decision.
 - Implement per-device rate limiter with bounded memory.
@@ -613,7 +614,7 @@ Implement the complete correctness path from Kafka message to Redis state and Po
 Expose production query APIs for latest location, nearby devices, and trip replay.
 
 ### Work Items
-- Implement gRPC `QueryService`.
+- Implement gRPC `QueryService`. (Gated adapter skeleton done; real server binding pending.)
 - Decide whether HTTP/JSON is required in addition to gRPC.
 - Implement latest location handler over Redis.
 - Implement nearby handler over Redis H3 index:

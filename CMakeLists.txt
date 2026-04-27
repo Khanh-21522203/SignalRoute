@@ -35,6 +35,7 @@ add_subdirectory(src/geofence)
 add_subdirectory(src/matching)
 add_subdirectory(src/workers)
 add_subdirectory(src/runtime)
+add_subdirectory(src/transport/grpc)
 
 # ────────────────────────────────────────────
 # Main executable

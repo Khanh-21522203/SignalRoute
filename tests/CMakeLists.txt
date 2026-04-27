@@ -46,6 +46,10 @@ add_executable(test_structured_log unit/test_structured_log.cpp)
 target_link_libraries(test_structured_log PRIVATE sr_common)
 add_test(NAME test_structured_log COMMAND test_structured_log)
 
+add_executable(test_grpc_transport_gating unit/test_grpc_transport_gating.cpp)
+target_link_libraries(test_grpc_transport_gating PRIVATE sr_common)
+add_test(NAME test_grpc_transport_gating COMMAND test_grpc_transport_gating)
+
 add_executable(test_runtime_application unit/test_runtime_application.cpp)
 target_link_libraries(test_runtime_application PRIVATE sr_runtime)
 add_test(NAME test_runtime_application COMMAND test_runtime_application)

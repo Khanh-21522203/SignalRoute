@@ -1,7 +1,7 @@
 # SignalRoute Dependency Strategy
 
 ## Purpose
-Batch 17 established the build contract for production dependencies without replacing the fallback runtime. Batch 18 added domain-to-wire conversion contracts. Batch 19 adds protobuf-only generated builds and keeps gRPC stubs optional because local gRPC packages may not be installed. Batch 34 keeps that contract while adding dependency-free operations logging and admin endpoint handler boundaries.
+Batch 17 established the build contract for production dependencies without replacing the fallback runtime. Batch 18 added domain-to-wire conversion contracts. Batch 19 adds protobuf-only generated builds and keeps gRPC stubs optional because local gRPC packages may not be installed. Batch 35 keeps that contract while adding gated admin/gateway/query gRPC adapter skeletons.
 
 ## Default Build Mode
 The default build is fallback mode:
@@ -48,6 +48,9 @@ The provider value does not install dependencies by itself. It records the inten
   - fallback mode: interface target with no generated files;
   - protobuf mode: static library generated from `proto/signalroute/*.proto`;
   - gRPC mode: adds generated `.grpc.pb.*` sources to the same target.
+- `sr_grpc_transport` always exists:
+  - fallback/protobuf mode: interface target with no gRPC headers or sources compiled;
+  - gRPC mode: static library with admin, gateway, and query adapter skeletons over existing service handlers.
 - `sr_common` links `sr_dependencies` and `signalroute_proto`, so adapter code can use stable compile definitions.
 - `src/common/proto/` owns dependency-free wire-shape structs and domain conversion helpers. Generated protobuf types should adapt to these helpers instead of leaking through service/domain code.
 - Real Kafka adapter code is hidden behind the existing wrapper API and pimpl storage; public headers do not expose librdkafka types.
@@ -87,4 +90,4 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
 
 ## Current Boundary
-Batch 34 adds structured logfmt startup/shutdown events and a transport-neutral admin health/metrics endpoint handler that future HTTP/gRPC bindings can reuse. Local fallback and protobuf builds pass. Package-backed configure checks are intentionally not rerun for normal feature batches until dependencies are installed or the batch touches that adapter path. gRPC service stubs remain gated by `SR_ENABLE_GRPC`.
+Batch 35 adds gated gRPC adapter skeletons for admin, gateway ingest, and query services. Local fallback and protobuf builds pass. The gRPC configure check fails clearly at `find_package(gRPC)` because local gRPC CMake packages are not installed, so package-backed adapter compile verification remains pending. gRPC service stubs and adapters remain gated by `SR_ENABLE_GRPC`.
