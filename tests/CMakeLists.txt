@@ -38,6 +38,14 @@ add_executable(test_admin_service unit/test_admin_service.cpp)
 target_link_libraries(test_admin_service PRIVATE sr_common)
 add_test(NAME test_admin_service COMMAND test_admin_service)
 
+add_executable(test_admin_endpoint_handler unit/test_admin_endpoint_handler.cpp)
+target_link_libraries(test_admin_endpoint_handler PRIVATE sr_common)
+add_test(NAME test_admin_endpoint_handler COMMAND test_admin_endpoint_handler)
+
+add_executable(test_structured_log unit/test_structured_log.cpp)
+target_link_libraries(test_structured_log PRIVATE sr_common)
+add_test(NAME test_structured_log COMMAND test_structured_log)
+
 add_executable(test_runtime_application unit/test_runtime_application.cpp)
 target_link_libraries(test_runtime_application PRIVATE sr_runtime)
 add_test(NAME test_runtime_application COMMAND test_runtime_application)

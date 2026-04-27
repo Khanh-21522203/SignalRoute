@@ -24,8 +24,9 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Geofence fallback evaluation for enter, exit, old-cell exit, dwell, audit, and event publication.
 - Matching fallback service lifecycle, reservation flow, nearest strategy, deadlines, cleanup, typed matching events, and Kafka request/result loop over the shared matching payload codec.
 - Worker fallback `run_once` flows for H3 cleanup, DLQ replay, and metrics export; DLQ replay retries transient history-write failures and defers uncommitted messages after retry exhaustion.
-- Dependency-free admin health and metrics service for component health aggregation, service/dependency/lifecycle probe helpers, readiness snapshots, and Prometheus-text metrics snapshots.
+- Dependency-free admin health and metrics service for component health aggregation, service/dependency/lifecycle probe helpers, readiness snapshots, Prometheus-text metrics snapshots, and transport-neutral health/metrics endpoint responses.
 - Dependency-free runtime application composition root that owns role-specific services, validates post-load runtime config, registers process-level admin lifecycle probes, reports startup failures through admin health, aggregates health/readiness, and centralizes graceful stop order.
+- Dependency-free structured logfmt event formatter used by process startup, shutdown, unhealthy, and fatal paths.
 - Fallback-first dependency build switches in `cmake/SignalRouteOptions.cmake` and central discovery/linking in `cmake/SignalRouteDependencies.cmake`.
 - Stable `signalroute_proto` target that is an interface target in fallback mode, a generated protobuf message library when `SR_ENABLE_PROTOBUF=ON`, and a generated gRPC stub library when `SR_ENABLE_GRPC=ON`.
 - Dependency-free domain-to-wire conversion contracts under `src/common/proto/` for location, query device state, geofence events, and matching request/result payloads.
@@ -736,11 +737,12 @@ Implement background operational jobs and observability.
 - Implement DLQ replay worker.
 - Implement metrics reporter or direct Prometheus exposer.
 - Implement admin health service.
-  - Status: dependency-free health aggregation, service/dependency probe helpers, and metrics snapshot service added; endpoint binding pending.
+  - Status: dependency-free health aggregation, service/dependency probe helpers, metrics snapshot service, and transport-neutral endpoint handler added; HTTP/gRPC binding pending.
 - Add structured logging.
+  - Status: dependency-free logfmt formatter added and used by runtime startup/shutdown paths.
 - Add graceful shutdown for all services.
 - Add readiness/liveness semantics.
-  - Status: common lifecycle snapshots and service readiness APIs added; process-level registration pending.
+  - Status: common lifecycle snapshots, service readiness APIs, and process-level admin registration added.
 - Add resource limit configuration.
 
 ### Acceptance Criteria

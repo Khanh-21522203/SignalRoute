@@ -1,4 +1,5 @@
 #include "common/config/config.h"
+#include "common/logging/structured_log.h"
 #include "common/metrics/metrics.h"
 #include "runtime/runtime_application.h"
 
@@ -9,8 +10,20 @@
 #include <iostream>
 #include <string>
 #include <thread>
+#include <utility>
+#include <vector>
 
 std::atomic<bool> g_stop_flag{false};
+
+void log_runtime_event(
+    const std::string& level,
+    const std::string& event,
+    const std::string& message,
+    std::vector<signalroute::LogField> fields = {}) {
+    signalroute::write_logfmt(
+        level == "error" ? std::cerr : std::cout,
+        signalroute::make_log_event(level, "signalroute", event, message, std::move(fields)));
+}
 
 void signal_handler(int sig) {
     if (sig == SIGINT || sig == SIGTERM) {
@@ -37,7 +50,11 @@ int main(int argc, char** argv) {
         }
     }
 
-    std::cout << "[SignalRoute] Starting. Config: " << config_path << "\n";
+    log_runtime_event(
+        "info",
+        "runtime.starting",
+        "starting SignalRoute process",
+        {{"config_path", config_path}});
 
     signalroute::Config config;
     try {
@@ -47,7 +64,11 @@ int main(int argc, char** argv) {
             config.validate();
         }
     } catch (const std::exception& e) {
-        std::cerr << "Failed to load config: " << e.what() << "\n";
+        log_runtime_event(
+            "error",
+            "runtime.config_failed",
+            "failed to load config",
+            {{"config_path", config_path}, {"error", e.what()}});
         return 1;
     }
 
@@ -59,22 +80,41 @@ int main(int argc, char** argv) {
     signalroute::RuntimeApplication app;
     try {
         app.start(config);
-        std::cout << "[SignalRoute] Role '" << config.server.role
-                  << "' started. Press Ctrl+C to stop.\n";
+        log_runtime_event(
+            "info",
+            "runtime.started",
+            "runtime started",
+            {{"role", config.server.role}});
 
         while (!g_stop_flag.load()) {
             if (!app.is_healthy()) {
-                std::cerr << "[SignalRoute] Runtime unhealthy! Initiating shutdown.\n";
+                log_runtime_event(
+                    "error",
+                    "runtime.unhealthy",
+                    "runtime unhealthy; initiating shutdown",
+                    {{"role", config.server.role}});
                 break;
             }
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
 
-        std::cout << "[SignalRoute] Shutting down...\n";
+        log_runtime_event(
+            "info",
+            "runtime.stopping",
+            "runtime stopping",
+            {{"role", config.server.role}});
         app.stop();
-        std::cout << "[SignalRoute] Shutdown complete.\n";
+        log_runtime_event(
+            "info",
+            "runtime.stopped",
+            "runtime stopped",
+            {{"role", config.server.role}});
     } catch (const std::exception& e) {
-        std::cerr << "[SignalRoute] Fatal error: " << e.what() << "\n";
+        log_runtime_event(
+            "error",
+            "runtime.fatal",
+            "fatal runtime error",
+            {{"role", config.server.role}, {"error", e.what()}});
         if (app.is_running()) {
             app.stop();
         }

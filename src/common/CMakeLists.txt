@@ -4,8 +4,10 @@
 
 add_library(sr_common STATIC
     admin/admin_service.cpp
+    admin/admin_endpoint_handler.cpp
     admin/lifecycle.cpp
     config/config.cpp
+    logging/structured_log.cpp
     spatial/h3_index.cpp
     spatial/haversine.cpp
     metrics/metrics.cpp
