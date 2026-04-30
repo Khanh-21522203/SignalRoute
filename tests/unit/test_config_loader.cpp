@@ -59,6 +59,10 @@ void test_loads_canonical_config() {
     assert(config.observability.admin_http_enabled);
     assert(config.observability.health_path == "/health");
     assert(config.observability.readiness_path == "/ready");
+    assert(!config.observability.require_kafka_readiness);
+    assert(!config.observability.require_redis_readiness);
+    assert(!config.observability.require_postgis_readiness);
+    assert(!config.observability.require_h3_readiness);
     assert(config.observability.log_level == "info");
 }
 
@@ -93,6 +97,10 @@ metrics_path = "/custom-metrics"
 admin_http_enabled = false
 health_path = "/live"
 readiness_path = "/ready-custom"
+require_kafka_readiness = true
+require_redis_readiness = true
+require_postgis_readiness = true
+require_h3_readiness = true
 )toml");
 
     const auto config = signalroute::Config::load(path.string());
@@ -113,6 +121,10 @@ readiness_path = "/ready-custom"
     assert(!config.observability.admin_http_enabled);
     assert(config.observability.health_path == "/live");
     assert(config.observability.readiness_path == "/ready-custom");
+    assert(config.observability.require_kafka_readiness);
+    assert(config.observability.require_redis_readiness);
+    assert(config.observability.require_postgis_readiness);
+    assert(config.observability.require_h3_readiness);
 }
 
 void test_missing_file_is_rejected() {

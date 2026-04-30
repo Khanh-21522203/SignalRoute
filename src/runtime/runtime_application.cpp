@@ -5,6 +5,22 @@
 #include <string>
 #include <utility>
 
+#ifndef SIGNALROUTE_HAS_KAFKA
+#define SIGNALROUTE_HAS_KAFKA 0
+#endif
+
+#ifndef SIGNALROUTE_HAS_REDIS
+#define SIGNALROUTE_HAS_REDIS 0
+#endif
+
+#ifndef SIGNALROUTE_HAS_POSTGIS
+#define SIGNALROUTE_HAS_POSTGIS 0
+#endif
+
+#ifndef SIGNALROUTE_HAS_H3
+#define SIGNALROUTE_HAS_H3 0
+#endif
+
 namespace signalroute {
 namespace {
 
@@ -16,6 +32,15 @@ AdminHttpRoutes routes_from_config(const Config& config) {
     routes.readiness_alias_path = config.observability.readiness_path == "/ready" ? "/readyz" : "/ready";
     routes.metrics_path = config.observability.metrics_path;
     return routes;
+}
+
+ComponentHealth production_adapter_health(std::string name, bool enabled) {
+    return ComponentHealth{
+        std::move(name),
+        enabled,
+        true,
+        enabled ? "production adapter enabled" : "production adapter required but not enabled in this build",
+    };
 }
 
 } // namespace
@@ -124,22 +149,26 @@ bool RuntimeApplication::is_healthy() const {
     if (!running_ || startup_failed_) {
         return false;
     }
-    return (!roles_.gateway || gateway_.is_healthy()) &&
-           (!roles_.processor || processor_.is_healthy()) &&
-           (!roles_.query || query_.is_healthy()) &&
-           (!roles_.geofence || geofence_.is_healthy()) &&
-           (!roles_.matching || matching_.is_healthy());
+    const bool services_healthy =
+        (!roles_.gateway || gateway_.is_healthy()) &&
+        (!roles_.processor || processor_.is_healthy()) &&
+        (!roles_.query || query_.is_healthy()) &&
+        (!roles_.geofence || geofence_.is_healthy()) &&
+        (!roles_.matching || matching_.is_healthy());
+    return services_healthy && admin_->health().healthy;
 }
 
 bool RuntimeApplication::is_ready() const {
     if (!running_ || startup_failed_) {
         return false;
     }
-    return (!roles_.gateway || gateway_.is_ready()) &&
-           (!roles_.processor || processor_.is_ready()) &&
-           (!roles_.query || query_.is_ready()) &&
-           (!roles_.geofence || geofence_.is_ready()) &&
-           (!roles_.matching || matching_.is_ready());
+    const bool services_ready =
+        (!roles_.gateway || gateway_.is_ready()) &&
+        (!roles_.processor || processor_.is_ready()) &&
+        (!roles_.query || query_.is_ready()) &&
+        (!roles_.geofence || geofence_.is_ready()) &&
+        (!roles_.matching || matching_.is_ready());
+    return services_ready && admin_->health().healthy;
 }
 
 bool RuntimeApplication::startup_failed() const {
@@ -219,7 +248,31 @@ void RuntimeApplication::register_admin_probes() {
     if (roles_.matching) {
         admin_->register_lifecycle_probe("matcher", [this] { return matching_.health_snapshot(); });
     }
+    register_dependency_readiness_probes();
     admin_->register_dependency_probe("event_bus", [] { return true; }, false);
+}
+
+void RuntimeApplication::register_dependency_readiness_probes() {
+    if (config_.observability.require_kafka_readiness) {
+        admin_->register_component("kafka", [] {
+            return production_adapter_health("kafka", SIGNALROUTE_HAS_KAFKA == 1);
+        });
+    }
+    if (config_.observability.require_redis_readiness) {
+        admin_->register_component("redis", [] {
+            return production_adapter_health("redis", SIGNALROUTE_HAS_REDIS == 1);
+        });
+    }
+    if (config_.observability.require_postgis_readiness) {
+        admin_->register_component("postgis", [] {
+            return production_adapter_health("postgis", SIGNALROUTE_HAS_POSTGIS == 1);
+        });
+    }
+    if (config_.observability.require_h3_readiness) {
+        admin_->register_component("h3", [] {
+            return production_adapter_health("h3", SIGNALROUTE_HAS_H3 == 1);
+        });
+    }
 }
 
 void RuntimeApplication::register_startup_failure_probe() {

@@ -1,7 +1,7 @@
 # SignalRoute Dependency Strategy
 
 ## Purpose
-Batch 17 established the build contract for production dependencies without replacing the fallback runtime. Batch 18 added domain-to-wire conversion contracts. Batch 19 adds protobuf-only generated builds and keeps gRPC stubs optional because local gRPC packages may not be installed. Batch 39 keeps that contract while exposing dependency-free admin HTTP responses through a runtime-owned, lifecycle-aware request loop.
+Batch 17 established the build contract for production dependencies without replacing the fallback runtime. Batch 18 added domain-to-wire conversion contracts. Batch 19 adds protobuf-only generated builds and keeps gRPC stubs optional because local gRPC packages may not be installed. Batch 40 keeps that contract while adding config-driven readiness policies for production dependency adapters.
 
 ## Default Build Mode
 The default build is fallback mode:
@@ -66,6 +66,7 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 - fail clearly when enabled without the required package;
 - avoid changing CSV fallback payload semantics until protobuf Kafka serialization is ready.
 - keep generated protobuf includes out of domain headers. Generated types belong at API/transport boundaries.
+- if a deployment marks an adapter as readiness-critical, ensure the matching `SR_ENABLE_REAL_*` switch is enabled and the adapter exposes a real health check before relying on it for production traffic.
 
 ## Recommended Implementation Order
 1. Install/provide the RdKafka CMake package and run broker-backed compile/integration verification for the `SR_ENABLE_REAL_KAFKA` adapter path.
@@ -88,6 +89,7 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | gRPC missing | `cmake -S . -B /tmp/signalroute-grpc-missing -DSR_ENABLE_PROTOBUF=ON -DSR_ENABLE_GRPC=ON` | Configure fails clearly if gRPC package is unavailable |
 | Production dependency missing | `cmake -S . -B /tmp/signalroute-h3 -DSR_ENABLE_REAL_H3=ON` | Configure fails at package discovery with a clear missing package error |
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
+| Readiness-critical adapter missing | Set `observability.require_redis_readiness = true` in fallback build | Admin health/readiness reports `503` with a required `redis` component |
 
 ## Current Boundary
-Batch 39 adds an in-process admin request loop over `RuntimeApplication` admin HTTP handling. It models start/stop lifecycle, rejects requests while stopped, counts handled requests, and keeps real socket binding out of the fallback runtime. Local fallback and protobuf builds pass. The gRPC configure check still fails clearly at `find_package(gRPC)` because local gRPC CMake packages are not installed, so package-backed adapter compile verification remains pending. gRPC service stubs and adapters remain gated by `SR_ENABLE_GRPC`.
+Batch 40 adds observability config flags for readiness-critical Kafka, Redis, PostGIS, and H3 adapters. In fallback builds these flags make admin health/readiness fail clearly because the production adapter is not enabled; defaults remain dependency-free. Local fallback and protobuf builds pass. The gRPC configure check still fails clearly at `find_package(gRPC)` because local gRPC CMake packages are not installed, so package-backed adapter compile verification remains pending. gRPC service stubs and adapters remain gated by `SR_ENABLE_GRPC`.

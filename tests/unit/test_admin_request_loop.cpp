@@ -87,12 +87,29 @@ void test_loop_stop_prevents_new_requests() {
     assert(loop.handled_requests() == 1);
 }
 
+void test_loop_exposes_required_dependency_readiness_failure() {
+    auto config = config_for_role("query");
+    config.observability.require_kafka_readiness = true;
+    signalroute::RuntimeApplication runtime;
+    runtime.start(config);
+    signalroute::AdminRequestLoop loop(runtime);
+
+    loop.start();
+    const auto response = loop.handle({"GET", "/ready", "application/json"});
+
+    assert(response.status_code == 503);
+    assert(response.body.find("\"name\":\"kafka\"") != std::string::npos);
+    assert(response.body.find("production adapter required but not enabled") != std::string::npos);
+    assert(loop.handled_requests() == 1);
+}
+
 int main() {
     std::cout << "test_admin_request_loop:\n";
     test_loop_rejects_requests_until_started();
     test_loop_routes_health_and_tracks_handled_requests();
     test_loop_delegates_disabled_admin_http_response();
     test_loop_stop_prevents_new_requests();
+    test_loop_exposes_required_dependency_readiness_failure();
     std::cout << "All admin request loop tests passed.\n";
     return 0;
 }

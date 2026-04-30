@@ -481,6 +481,30 @@ Config Config::load(const std::string& path) {
         get_string(sections, "observability", "health_path", config.observability.health_path, path);
     config.observability.readiness_path =
         get_string(sections, "observability", "readiness_path", config.observability.readiness_path, path);
+    config.observability.require_kafka_readiness =
+        get_bool(sections,
+                 "observability",
+                 "require_kafka_readiness",
+                 config.observability.require_kafka_readiness,
+                 path);
+    config.observability.require_redis_readiness =
+        get_bool(sections,
+                 "observability",
+                 "require_redis_readiness",
+                 config.observability.require_redis_readiness,
+                 path);
+    config.observability.require_postgis_readiness =
+        get_bool(sections,
+                 "observability",
+                 "require_postgis_readiness",
+                 config.observability.require_postgis_readiness,
+                 path);
+    config.observability.require_h3_readiness =
+        get_bool(sections,
+                 "observability",
+                 "require_h3_readiness",
+                 config.observability.require_h3_readiness,
+                 path);
 
     config.validate();
     return config;

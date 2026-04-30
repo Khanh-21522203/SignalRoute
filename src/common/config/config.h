@@ -117,6 +117,10 @@ struct ObservabilityConfig {
     bool        admin_http_enabled = true;
     std::string health_path = "/health";
     std::string readiness_path = "/ready";
+    bool        require_kafka_readiness = false;
+    bool        require_redis_readiness = false;
+    bool        require_postgis_readiness = false;
+    bool        require_h3_readiness = false;
 };
 
 /**

@@ -54,6 +54,7 @@ private:
     void configure_admin_http();
     void register_runtime_probe();
     void register_admin_probes();
+    void register_dependency_readiness_probes();
     void register_startup_failure_probe();
 
     std::atomic<bool> running_{false};
