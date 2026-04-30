@@ -23,6 +23,7 @@ public:
     explicit AdminEndpointHandler(AdminService& admin);
 
     [[nodiscard]] AdminEndpointResponse handle_health(AdminEndpointRequest request = {}) const;
+    [[nodiscard]] AdminEndpointResponse handle_readiness(AdminEndpointRequest request = {}) const;
     [[nodiscard]] AdminEndpointResponse handle_metrics(AdminEndpointRequest request = {}) const;
 
 private:

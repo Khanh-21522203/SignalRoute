@@ -39,6 +39,15 @@ AdminEndpointResponse AdminEndpointHandler::handle_health(AdminEndpointRequest /
     };
 }
 
+AdminEndpointResponse AdminEndpointHandler::handle_readiness(AdminEndpointRequest /*request*/) const {
+    const auto readiness = admin_.readiness();
+    return AdminEndpointResponse{
+        readiness.healthy ? 200 : 503,
+        "application/json",
+        serialize_health_json(readiness),
+    };
+}
+
 AdminEndpointResponse AdminEndpointHandler::handle_metrics(AdminEndpointRequest /*request*/) const {
     const auto metrics = admin_.metrics();
     return AdminEndpointResponse{

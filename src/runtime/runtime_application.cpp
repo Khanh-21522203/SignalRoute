@@ -168,7 +168,7 @@ bool RuntimeApplication::is_ready() const {
         (!roles_.query || query_.is_ready()) &&
         (!roles_.geofence || geofence_.is_ready()) &&
         (!roles_.matching || matching_.is_ready());
-    return services_ready && admin_->health().healthy;
+    return services_ready && admin_->readiness().healthy;
 }
 
 bool RuntimeApplication::startup_failed() const {
@@ -254,22 +254,22 @@ void RuntimeApplication::register_admin_probes() {
 
 void RuntimeApplication::register_dependency_readiness_probes() {
     if (config_.observability.require_kafka_readiness) {
-        admin_->register_component("kafka", [] {
+        admin_->register_readiness_component("kafka", [] {
             return production_adapter_health("kafka", SIGNALROUTE_HAS_KAFKA == 1);
         });
     }
     if (config_.observability.require_redis_readiness) {
-        admin_->register_component("redis", [] {
+        admin_->register_readiness_component("redis", [] {
             return production_adapter_health("redis", SIGNALROUTE_HAS_REDIS == 1);
         });
     }
     if (config_.observability.require_postgis_readiness) {
-        admin_->register_component("postgis", [] {
+        admin_->register_readiness_component("postgis", [] {
             return production_adapter_health("postgis", SIGNALROUTE_HAS_POSTGIS == 1);
         });
     }
     if (config_.observability.require_h3_readiness) {
-        admin_->register_component("h3", [] {
+        admin_->register_readiness_component("h3", [] {
             return production_adapter_health("h3", SIGNALROUTE_HAS_H3 == 1);
         });
     }

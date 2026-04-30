@@ -19,6 +19,7 @@ struct ComponentHealth {
 };
 
 struct HealthRequest {};
+struct ReadinessRequest {};
 
 struct HealthResponse {
     bool healthy = false;
@@ -44,6 +45,7 @@ public:
     AdminService(std::string role, std::string version = "0.1.0");
 
     void register_component(std::string name, ComponentProbe probe);
+    void register_readiness_component(std::string name, ComponentProbe probe);
     void register_service_probe(std::string name, BooleanProbe probe, bool required = true);
     void register_dependency_probe(std::string name, BooleanProbe probe, bool required = true);
     void register_lifecycle_probe(
@@ -53,14 +55,18 @@ public:
     void clear_components();
 
     [[nodiscard]] HealthResponse health(const HealthRequest& request = {}) const;
+    [[nodiscard]] HealthResponse readiness(const ReadinessRequest& request = {}) const;
     [[nodiscard]] MetricsResponse metrics(const MetricsRequest& request = {}) const;
     [[nodiscard]] std::size_t component_count() const;
 
 private:
     struct RegisteredComponent {
         std::string name;
-        ComponentProbe probe;
+        ComponentProbe health_probe;
+        ComponentProbe readiness_probe;
     };
+
+    [[nodiscard]] HealthResponse evaluate(bool readiness) const;
 
     std::string role_;
     std::string version_;

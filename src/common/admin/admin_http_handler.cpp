@@ -8,8 +8,11 @@ namespace {
 
 bool is_health_path(const std::string& path, const AdminHttpRoutes& routes) {
     return path == routes.health_path ||
-           path == routes.health_alias_path ||
-           path == routes.readiness_path ||
+           path == routes.health_alias_path;
+}
+
+bool is_readiness_path(const std::string& path, const AdminHttpRoutes& routes) {
+    return path == routes.readiness_path ||
            path == routes.readiness_alias_path;
 }
 
@@ -39,6 +42,9 @@ AdminHttpResponse AdminHttpHandler::handle(AdminHttpRequest request) const {
     }
     if (is_health_path(request.path, routes_)) {
         return endpoint_to_http(endpoint_handler_.handle_health({request.accept}), include_body);
+    }
+    if (is_readiness_path(request.path, routes_)) {
+        return endpoint_to_http(endpoint_handler_.handle_readiness({request.accept}), include_body);
     }
     if (is_metrics_path(request.path, routes_)) {
         return endpoint_to_http(endpoint_handler_.handle_metrics({request.accept}), include_body);

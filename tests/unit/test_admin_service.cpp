@@ -43,6 +43,22 @@ void test_required_component_failure_marks_service_unhealthy() {
     assert(health.components[0].detail == "ping failed");
 }
 
+void test_readiness_only_component_does_not_affect_health() {
+    signalroute::AdminService admin("query");
+    admin.register_readiness_component("redis", [] {
+        return signalroute::ComponentHealth{"redis", false, true, "dependency required but unavailable"};
+    });
+
+    const auto health = admin.health();
+    const auto readiness = admin.readiness();
+
+    assert(health.healthy);
+    assert(health.components.empty());
+    assert(!readiness.healthy);
+    assert(readiness.components.size() == 1);
+    assert(!readiness.component_healthy("redis"));
+}
+
 void test_probe_exception_is_reported_as_unhealthy_component() {
     signalroute::AdminService admin("query");
     admin.register_component("postgis", []() -> signalroute::ComponentHealth {
@@ -78,27 +94,39 @@ void test_service_and_dependency_probe_helpers() {
     assert(!health.component_healthy("gateway"));
 }
 
-void test_lifecycle_probe_helper_reports_liveness_detail() {
+void test_lifecycle_probe_helper_reports_liveness_and_readiness_detail() {
     signalroute::ServiceHealthSnapshot snapshot = signalroute::ready_health("serving");
     signalroute::AdminService admin("standalone");
     admin.register_lifecycle_probe("query", [&] { return snapshot; });
 
     auto health = admin.health();
+    auto readiness = admin.readiness();
     assert(health.healthy);
+    assert(readiness.healthy);
     assert(health.component_healthy("query"));
+    assert(readiness.component_healthy("query"));
     assert(health.components.front().detail == "ready: serving");
+    assert(readiness.components.front().detail == "ready: serving");
 
     snapshot = signalroute::draining_health("shutdown requested");
     health = admin.health();
+    readiness = admin.readiness();
     assert(health.healthy);
+    assert(!readiness.healthy);
     assert(health.component_healthy("query"));
+    assert(!readiness.component_healthy("query"));
     assert(health.components.front().detail == "draining: shutdown requested");
+    assert(readiness.components.front().detail == "draining: shutdown requested");
 
     snapshot = signalroute::stopped_health("stopped");
     health = admin.health();
+    readiness = admin.readiness();
     assert(!health.healthy);
+    assert(!readiness.healthy);
     assert(!health.component_healthy("query"));
+    assert(!readiness.component_healthy("query"));
     assert(health.components.front().detail == "stopped: stopped");
+    assert(readiness.components.front().detail == "stopped: stopped");
 }
 
 void test_metrics_response_exports_prometheus_text() {
@@ -117,9 +145,10 @@ int main() {
     std::cout << "test_admin_service:\n";
     test_health_reports_registered_components();
     test_required_component_failure_marks_service_unhealthy();
+    test_readiness_only_component_does_not_affect_health();
     test_probe_exception_is_reported_as_unhealthy_component();
     test_service_and_dependency_probe_helpers();
-    test_lifecycle_probe_helper_reports_liveness_detail();
+    test_lifecycle_probe_helper_reports_liveness_and_readiness_detail();
     test_metrics_response_exports_prometheus_text();
     std::cout << "All admin service tests passed.\n";
     return 0;

@@ -21,7 +21,13 @@ AdminService::AdminService(std::string role, std::string version)
 {}
 
 void AdminService::register_component(std::string name, ComponentProbe probe) {
-    components_.push_back(RegisteredComponent{std::move(name), std::move(probe)});
+    const std::string component_name = std::move(name);
+    components_.push_back(RegisteredComponent{component_name, probe, std::move(probe)});
+}
+
+void AdminService::register_readiness_component(std::string name, ComponentProbe probe) {
+    const std::string component_name = std::move(name);
+    components_.push_back(RegisteredComponent{component_name, nullptr, std::move(probe)});
 }
 
 void AdminService::register_service_probe(std::string name, BooleanProbe probe, bool required) {
@@ -55,7 +61,7 @@ void AdminService::register_lifecycle_probe(
     std::function<ServiceHealthSnapshot()> probe,
     bool required) {
     const std::string component_name = std::move(name);
-    register_component(component_name, [component_name, probe = std::move(probe), required] {
+    auto health_probe = [component_name, probe, required] {
         const auto snapshot = probe ? probe() : stopped_health("lifecycle probe missing");
         return ComponentHealth{
             component_name,
@@ -63,7 +69,17 @@ void AdminService::register_lifecycle_probe(
             required,
             std::string(lifecycle_state_to_string(snapshot.state)) + ": " + snapshot.detail,
         };
-    });
+    };
+    auto readiness_probe = [component_name, probe = std::move(probe), required] {
+        const auto snapshot = probe ? probe() : stopped_health("lifecycle probe missing");
+        return ComponentHealth{
+            component_name,
+            snapshot.ready,
+            required,
+            std::string(lifecycle_state_to_string(snapshot.state)) + ": " + snapshot.detail,
+        };
+    };
+    components_.push_back(RegisteredComponent{component_name, std::move(health_probe), std::move(readiness_probe)});
 }
 
 void AdminService::clear_components() {
@@ -71,6 +87,14 @@ void AdminService::clear_components() {
 }
 
 HealthResponse AdminService::health(const HealthRequest& /*request*/) const {
+    return evaluate(false);
+}
+
+HealthResponse AdminService::readiness(const ReadinessRequest& /*request*/) const {
+    return evaluate(true);
+}
+
+HealthResponse AdminService::evaluate(bool readiness) const {
     HealthResponse response;
     response.role = role_;
     response.version = version_;
@@ -79,9 +103,14 @@ HealthResponse AdminService::health(const HealthRequest& /*request*/) const {
     response.healthy = true;
 
     for (const auto& registered : components_) {
+        const auto& probe = readiness ? registered.readiness_probe : registered.health_probe;
+        if (!probe) {
+            continue;
+        }
+
         ComponentHealth component;
         try {
-            component = registered.probe ? registered.probe() : ComponentHealth{};
+            component = probe();
             if (component.name.empty()) {
                 component.name = registered.name;
             }

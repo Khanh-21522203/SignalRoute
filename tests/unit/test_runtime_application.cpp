@@ -125,7 +125,7 @@ void test_runtime_admin_http_can_be_disabled_by_config() {
     app.stop();
 }
 
-void test_required_dependency_readiness_policy_marks_runtime_unready() {
+void test_required_dependency_readiness_policy_marks_runtime_unready_but_live() {
     auto config = config_for_role("query");
     config.observability.require_redis_readiness = true;
 
@@ -133,18 +133,24 @@ void test_required_dependency_readiness_policy_marks_runtime_unready() {
     app.start(config);
 
     assert(app.is_running());
-    assert(!app.is_healthy());
+    assert(app.is_healthy());
     assert(!app.is_ready());
 
     const auto health = app.admin().health();
-    assert(!health.healthy);
-    assert(!health.component_healthy("redis"));
-    assert(health.components.size() == 4);
+    const auto readiness = app.admin().readiness();
+    assert(health.healthy);
+    assert(!readiness.healthy);
+    assert(!readiness.component_healthy("redis"));
+    assert(health.components.size() == 3);
+    assert(readiness.components.size() == 4);
 
-    const auto response = app.handle_admin_http({"GET", "/ready", "application/json"});
-    assert(response.status_code == 503);
-    assert(response.body.find("\"name\":\"redis\"") != std::string::npos);
-    assert(response.body.find("production adapter required but not enabled") != std::string::npos);
+    const auto health_response = app.handle_admin_http({"GET", "/health", "application/json"});
+    const auto readiness_response = app.handle_admin_http({"GET", "/ready", "application/json"});
+    assert(health_response.status_code == 200);
+    assert(health_response.body.find("\"name\":\"redis\"") == std::string::npos);
+    assert(readiness_response.status_code == 503);
+    assert(readiness_response.body.find("\"name\":\"redis\"") != std::string::npos);
+    assert(readiness_response.body.find("production adapter required but not enabled") != std::string::npos);
 
     app.stop();
 }
@@ -183,7 +189,7 @@ int main() {
     test_gateway_runtime_registers_only_gateway_probe();
     test_runtime_exposes_admin_http_handler_with_configured_routes();
     test_runtime_admin_http_can_be_disabled_by_config();
-    test_required_dependency_readiness_policy_marks_runtime_unready();
+    test_required_dependency_readiness_policy_marks_runtime_unready_but_live();
     test_runtime_startup_failure_is_reported_to_admin_health();
     std::cout << "All runtime application tests passed.\n";
     return 0;

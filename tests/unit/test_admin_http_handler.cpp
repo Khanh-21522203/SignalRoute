@@ -42,16 +42,19 @@ void test_health_route_returns_json_200() {
     assert(has_header(response, "Cache-Control", "no-store"));
 }
 
-void test_ready_alias_maps_to_health_and_unhealthy_returns_503() {
+void test_ready_alias_maps_to_readiness_and_unhealthy_returns_503() {
     signalroute::AdminService admin("query");
-    admin.register_component("redis", [] {
+    admin.register_readiness_component("redis", [] {
         return signalroute::ComponentHealth{"redis", false, true, "down"};
     });
     signalroute::AdminEndpointHandler endpoint(admin);
     signalroute::AdminHttpHandler handler(endpoint);
 
+    const auto health = handler.handle({"GET", "/health", "application/json"});
     const auto response = handler.handle({"GET", "/readyz", "application/json"});
 
+    assert(health.ok());
+    assert(health.status_code == 200);
     assert(!response.ok());
     assert(response.status_code == 503);
     assert(response.reason_phrase == "Service Unavailable");
@@ -129,7 +132,7 @@ void test_serialize_http_response_writes_status_headers_and_body() {
 int main() {
     std::cout << "test_admin_http_handler:\n";
     test_health_route_returns_json_200();
-    test_ready_alias_maps_to_health_and_unhealthy_returns_503();
+    test_ready_alias_maps_to_readiness_and_unhealthy_returns_503();
     test_metrics_route_returns_prometheus_text();
     test_head_returns_headers_without_body();
     test_unknown_path_returns_404();

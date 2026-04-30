@@ -37,6 +37,24 @@ void test_health_handler_maps_unhealthy_to_503_and_escapes_detail() {
     assert(response.body.find("ping \\\"failed\\\"") != std::string::npos);
 }
 
+void test_readiness_handler_maps_readiness_only_failure_to_503() {
+    signalroute::AdminService admin("query");
+    admin.register_readiness_component("redis", [] {
+        return signalroute::ComponentHealth{"redis", false, true, "redis down"};
+    });
+    signalroute::AdminEndpointHandler handler(admin);
+
+    const auto health = handler.handle_health();
+    const auto readiness = handler.handle_readiness();
+
+    assert(health.ok());
+    assert(health.status_code == 200);
+    assert(!readiness.ok());
+    assert(readiness.status_code == 503);
+    assert(readiness.body.find("\"name\":\"redis\"") != std::string::npos);
+    assert(readiness.body.find("redis down") != std::string::npos);
+}
+
 void test_metrics_handler_returns_prometheus_text() {
     auto& metrics = signalroute::Metrics::instance();
     metrics.reset_for_test();
@@ -56,6 +74,7 @@ int main() {
     std::cout << "test_admin_endpoint_handler:\n";
     test_health_handler_serializes_healthy_response();
     test_health_handler_maps_unhealthy_to_503_and_escapes_detail();
+    test_readiness_handler_maps_readiness_only_failure_to_503();
     test_metrics_handler_returns_prometheus_text();
     std::cout << "All admin endpoint handler tests passed.\n";
     return 0;

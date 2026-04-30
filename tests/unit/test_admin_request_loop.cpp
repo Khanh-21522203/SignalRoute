@@ -95,12 +95,15 @@ void test_loop_exposes_required_dependency_readiness_failure() {
     signalroute::AdminRequestLoop loop(runtime);
 
     loop.start();
+    const auto health = loop.handle({"GET", "/health", "application/json"});
     const auto response = loop.handle({"GET", "/ready", "application/json"});
 
+    assert(health.status_code == 200);
+    assert(health.body.find("\"name\":\"kafka\"") == std::string::npos);
     assert(response.status_code == 503);
     assert(response.body.find("\"name\":\"kafka\"") != std::string::npos);
     assert(response.body.find("production adapter required but not enabled") != std::string::npos);
-    assert(loop.handled_requests() == 1);
+    assert(loop.handled_requests() == 2);
 }
 
 int main() {
