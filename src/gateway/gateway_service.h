@@ -34,6 +34,7 @@ namespace signalroute {
 
 // Forward declarations
 class EventBus;
+class GatewayAdmissionControl;
 class KafkaProducer;
 class RateLimiter;
 class Validator;
@@ -48,10 +49,12 @@ struct IngestResult {
 
 struct IngestOneRequest {
     LocationEvent event;
+    std::string api_key;
 };
 
 struct IngestBatchRequest {
     std::vector<LocationEvent> events;
+    std::string api_key;
 };
 
 struct IngestResponse {
@@ -107,9 +110,15 @@ public:
     IngestResponse handle_ingest_batch(IngestBatchRequest request);
 
     std::size_t tracked_devices_for_test() const;
+    int in_flight_requests_for_test() const;
 
 private:
     void start_with_bus(const Config& config, EventBus* external_bus);
+    IngestResponse reject_transport_request(
+        const std::string& reason,
+        int rejected_count,
+        const std::string& device_id,
+        bool backpressure);
 
     std::atomic<bool> running_{false};
     std::atomic<ServiceLifecycleState> lifecycle_state_{ServiceLifecycleState::Stopped};
@@ -119,6 +128,7 @@ private:
     std::unique_ptr<KafkaProducer> producer_;
     std::unique_ptr<Validator> validator_;
     std::unique_ptr<RateLimiter> rate_limiter_;
+    std::unique_ptr<GatewayAdmissionControl> admission_;
 };
 
 } // namespace signalroute

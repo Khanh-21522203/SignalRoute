@@ -1,5 +1,6 @@
 # Gateway service
 add_library(sr_gateway STATIC
+    admission_control.cpp
     gateway_service.cpp
     validator.cpp
     rate_limiter.cpp

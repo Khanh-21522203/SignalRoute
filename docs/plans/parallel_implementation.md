@@ -11,7 +11,7 @@ This file defines the preparation required before running multiple agents or dev
 - The tracked completion roadmap is `docs/plans/finish_plan.md`.
 - Dependency strategy is tracked in `docs/plans/dependency_strategy.md`.
 - Gateway, processor, geofence, matching payload codecs, and DLQ replay use shared codecs. Protobuf payloads are emitted when `SR_ENABLE_PROTOBUF=ON`; CSV remains fallback-build scaffolding and decoder compatibility.
-- Gateway and query now expose dependency-free transport-facing request/response handlers over existing service methods plus gated gRPC adapter skeletons. Real gRPC server binding and UDP/HTTP endpoints remain pending.
+- Gateway and query now expose dependency-free transport-facing request/response handlers over existing service methods plus gated gRPC adapter skeletons. Gateway transport handlers also have optional API-key admission and bounded in-flight backpressure contracts. Real gRPC server binding and UDP/HTTP endpoints remain pending.
 - Admin health/metrics now has a dependency-free service boundary for component health aggregation, service/dependency/lifecycle probe helpers, readiness snapshots, Prometheus-text metric snapshots, transport-neutral health/metrics endpoint responses, and a gated gRPC adapter skeleton. Real gRPC/HTTP server binding remains pending.
 - Runtime startup now flows through a dependency-free `RuntimeApplication` composition boundary that owns role-selected services, validates post-load config, registers process-level admin lifecycle probes, reports startup failures through admin health, aggregates readiness/health, and stops services in reverse order.
 - Process startup/shutdown paths emit structured logfmt events through a dependency-free formatter.
@@ -134,4 +134,4 @@ Do not run these at the same time without coordination:
 - CMake dependency strategy and any task adding external dependencies
 
 ## Next Recommended Implementation Task
-Continue with transport binding preparation after gRPC packages are installed: compile `SR_ENABLE_GRPC=ON`, fix any package-backed adapter compile issues, then add a minimal server composition object that registers admin/gateway/query gRPC services by role. Until then, continue dependency-free work such as auth/backpressure contracts or HTTP health binding. Keep CSV fallback decoding until durable Kafka integration tests pass.
+Continue with dependency-free HTTP health binding or gateway request hardening while gRPC packages remain unavailable. If gRPC packages are installed, compile `SR_ENABLE_GRPC=ON`, fix any package-backed adapter compile issues, then add a minimal server composition object that registers admin/gateway/query gRPC services by role. Keep CSV fallback decoding until durable Kafka integration tests pass.

@@ -90,4 +90,4 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
 
 ## Current Boundary
-Batch 35 adds gated gRPC adapter skeletons for admin, gateway ingest, and query services. Local fallback and protobuf builds pass. The gRPC configure check fails clearly at `find_package(gRPC)` because local gRPC CMake packages are not installed, so package-backed adapter compile verification remains pending. gRPC service stubs and adapters remain gated by `SR_ENABLE_GRPC`.
+Batch 36 adds dependency-free gateway admission contracts for optional API-key auth and bounded in-flight request backpressure. Local fallback and protobuf builds pass. The gRPC configure check still fails clearly at `find_package(gRPC)` because local gRPC CMake packages are not installed, so package-backed adapter compile verification remains pending. gRPC service stubs and adapters remain gated by `SR_ENABLE_GRPC`.

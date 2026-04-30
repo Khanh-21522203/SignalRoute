@@ -210,6 +210,54 @@ void test_transport_ingest_batch_preserves_batch_validation() {
     assert(!consumer.poll(0).has_value());
 }
 
+void test_transport_ingest_rejects_missing_api_key_when_auth_enabled() {
+    const auto topic = topic_name("auth_rejected");
+    auto config = config_for_topic(topic);
+    config.gateway.auth_required = true;
+    config.gateway.api_key = "secret";
+    signalroute::EventBus bus;
+    signalroute::GatewayService gateway;
+    signalroute::KafkaConsumer consumer(config.kafka, {topic});
+    int rejected = 0;
+    std::string reason;
+
+    auto rejected_sub = bus.subscribe<signalroute::events::IngestBatchRejected>(
+        [&](const signalroute::events::IngestBatchRejected& event) {
+            ++rejected;
+            reason = event.reason;
+        });
+
+    gateway.start(config, bus);
+    const auto response = gateway.handle_ingest_one({event("dev-1", 1), ""});
+
+    assert(!response.ok());
+    assert(response.accepted_count == 0);
+    assert(response.rejected_count == 1);
+    assert(response.errors.size() == 1);
+    assert(response.errors.front() == "unauthorized");
+    assert(rejected == 1);
+    assert(reason == "unauthorized");
+    assert(!consumer.poll(0).has_value());
+}
+
+void test_transport_ingest_accepts_matching_api_key() {
+    const auto topic = topic_name("auth_accepted");
+    auto config = config_for_topic(topic);
+    config.gateway.auth_required = true;
+    config.gateway.api_key = "secret";
+    signalroute::GatewayService gateway;
+    signalroute::KafkaConsumer consumer(config.kafka, {topic});
+
+    gateway.start(config);
+    const auto response = gateway.handle_ingest_one({event("dev-1", 1), "secret"});
+
+    assert(response.ok());
+    assert(response.accepted_count == 1);
+    assert(response.rejected_count == 0);
+    assert(gateway.in_flight_requests_for_test() == 0);
+    assert(consumer.poll(0).has_value());
+}
+
 void test_gateway_readiness_tracks_lifecycle() {
     const auto topic = topic_name("readiness");
     auto config = config_for_topic(topic);
@@ -243,6 +291,8 @@ int main() {
     test_ingest_batch_reports_received_and_rejects_oversized_batch();
     test_transport_ingest_one_returns_stamped_response();
     test_transport_ingest_batch_preserves_batch_validation();
+    test_transport_ingest_rejects_missing_api_key_when_auth_enabled();
+    test_transport_ingest_accepts_matching_api_key();
     test_gateway_readiness_tracks_lifecycle();
     std::cout << "All gateway service tests passed.\n";
     return 0;

@@ -1,5 +1,6 @@
 #include "gateway_service.h"
 
+#include "admission_control.h"
 #include "rate_limiter.h"
 #include "validator.h"
 #include "../common/events/all_events.h"
@@ -51,6 +52,7 @@ void GatewayService::start_with_bus(const Config& config, EventBus* external_bus
     producer_ = std::make_unique<KafkaProducer>(config.kafka);
     validator_ = std::make_unique<Validator>(config.gateway);
     rate_limiter_ = std::make_unique<RateLimiter>(config.gateway.rate_limit_rps_per_device);
+    admission_ = std::make_unique<GatewayAdmissionControl>(config.gateway);
     running_ = true;
     lifecycle_state_.store(ServiceLifecycleState::Ready);
     // gRPC/UDP servers are integrated in the transport dependency milestone.
@@ -180,6 +182,18 @@ IngestResult GatewayService::ingest_batch(const std::vector<LocationEvent>& batc
 }
 
 IngestResponse GatewayService::handle_ingest_one(IngestOneRequest request) {
+    if (!admission_) {
+        return reject_transport_request("gateway service is not running", 1, request.event.device_id, false);
+    }
+    auto auth = admission_->authorize(request.api_key);
+    if (auth.is_err()) {
+        return reject_transport_request(auth.error(), 1, request.event.device_id, false);
+    }
+    auto lease = admission_->try_acquire();
+    if (lease.is_err()) {
+        return reject_transport_request(lease.error(), 1, request.event.device_id, true);
+    }
+
     IngestResponse response;
     auto result = ingest_one(std::move(request.event));
     if (result.is_ok()) {
@@ -194,6 +208,20 @@ IngestResponse GatewayService::handle_ingest_one(IngestOneRequest request) {
 }
 
 IngestResponse GatewayService::handle_ingest_batch(IngestBatchRequest request) {
+    const std::string device_id = request.events.empty() ? "" : request.events.front().device_id;
+    const int rejected_count = request.events.empty() ? 1 : static_cast<int>(request.events.size());
+    if (!admission_) {
+        return reject_transport_request("gateway service is not running", rejected_count, device_id, false);
+    }
+    auto auth = admission_->authorize(request.api_key);
+    if (auth.is_err()) {
+        return reject_transport_request(auth.error(), rejected_count, device_id, false);
+    }
+    auto lease = admission_->try_acquire();
+    if (lease.is_err()) {
+        return reject_transport_request(lease.error(), rejected_count, device_id, true);
+    }
+
     IngestResponse response;
     const auto result = ingest_batch(request.events);
     response.accepted = result.ok();
@@ -205,6 +233,27 @@ IngestResponse GatewayService::handle_ingest_batch(IngestBatchRequest request) {
 
 std::size_t GatewayService::tracked_devices_for_test() const {
     return rate_limiter_ ? rate_limiter_->tracked_devices() : 0;
+}
+
+int GatewayService::in_flight_requests_for_test() const {
+    return admission_ ? admission_->in_flight() : 0;
+}
+
+IngestResponse GatewayService::reject_transport_request(
+    const std::string& reason,
+    int rejected_count,
+    const std::string& device_id,
+    bool backpressure) {
+    IngestResponse response;
+    response.rejected_count = rejected_count;
+    response.errors.push_back(reason);
+    if (event_bus_) {
+        if (backpressure) {
+            event_bus_->publish(events::GatewayBackpressureApplied{reason, config_.gateway.queue_full_timeout_ms});
+        }
+        event_bus_->publish(events::IngestBatchRejected{device_id, reason, rejected_count});
+    }
+    return response;
 }
 
 } // namespace signalroute

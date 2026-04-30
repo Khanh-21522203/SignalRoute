@@ -52,6 +52,9 @@ void test_loads_canonical_config() {
     assert(config.redis.addrs == "localhost:6379");
     assert(config.postgis.dsn.find("dbname=signalroute") != std::string::npos);
     assert(config.geofence.eval_enabled);
+    assert(!config.gateway.auth_required);
+    assert(config.gateway.api_key.empty());
+    assert(config.gateway.max_in_flight_requests == 0);
     assert(config.matching.request_topic == "sr.match.requests");
     assert(config.observability.log_level == "info");
 }
@@ -76,6 +79,11 @@ sequence_guard_enabled = false
 
 [spatial]
 nearby_max_radius_m = 123.5
+
+[gateway]
+auth_required = true
+api_key = "secret"
+max_in_flight_requests = 8
 )toml");
 
     const auto config = signalroute::Config::load(path.string());
@@ -89,6 +97,9 @@ nearby_max_radius_m = 123.5
     assert(config.kafka.dlq_topic == "tm.location.dlq");
     assert(!config.processor.sequence_guard_enabled);
     assert(config.spatial.nearby_max_radius_m == 123.5);
+    assert(config.gateway.auth_required);
+    assert(config.gateway.api_key == "secret");
+    assert(config.gateway.max_in_flight_requests == 8);
 }
 
 void test_missing_file_is_rejected() {
@@ -130,6 +141,28 @@ pool_size = "many"
     });
 }
 
+void test_auth_required_without_api_key_is_rejected() {
+    const auto path = write_config("signalroute_config_missing_gateway_api_key.toml", minimal_valid_config() + R"toml(
+[gateway]
+auth_required = true
+)toml");
+
+    expect_throws([&] {
+        (void)signalroute::Config::load(path.string());
+    });
+}
+
+void test_negative_in_flight_limit_is_rejected() {
+    const auto path = write_config("signalroute_config_invalid_in_flight.toml", minimal_valid_config() + R"toml(
+[gateway]
+max_in_flight_requests = -1
+)toml");
+
+    expect_throws([&] {
+        (void)signalroute::Config::load(path.string());
+    });
+}
+
 void test_post_load_override_validation_uses_same_rules() {
     const auto path = write_config("signalroute_config_post_load_override.toml", minimal_valid_config());
     auto config = signalroute::Config::load(path.string());
@@ -148,6 +181,8 @@ int main() {
     test_invalid_role_is_rejected();
     test_invalid_numeric_value_is_rejected();
     test_invalid_value_type_is_rejected();
+    test_auth_required_without_api_key_is_rejected();
+    test_negative_in_flight_limit_is_rejected();
     test_post_load_override_validation_uses_same_rules();
     std::cout << "All config loader tests passed.\n";
     return 0;

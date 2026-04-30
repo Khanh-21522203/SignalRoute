@@ -327,6 +327,10 @@ void validate_config(const Config& config) {
     require_positive(config.gateway.rate_limit_rps_per_device, "gateway.rate_limit_rps_per_device");
     require_non_negative(config.gateway.timestamp_skew_tolerance_s, "gateway.timestamp_skew_tolerance_s");
     require_positive(config.gateway.queue_full_timeout_ms, "gateway.queue_full_timeout_ms");
+    if (config.gateway.auth_required) {
+        require_non_empty(config.gateway.api_key, "gateway.api_key");
+    }
+    require_non_negative(config.gateway.max_in_flight_requests, "gateway.max_in_flight_requests");
 
     require_non_empty(config.matching.strategy_name, "matching.strategy_name");
     require_non_empty(config.matching.request_topic, "matching.request_topic");
@@ -431,6 +435,11 @@ Config Config::load(const std::string& path) {
         get_int(sections, "gateway", "timestamp_skew_tolerance_s", config.gateway.timestamp_skew_tolerance_s, path);
     config.gateway.queue_full_timeout_ms =
         get_int(sections, "gateway", "queue_full_timeout_ms", config.gateway.queue_full_timeout_ms, path);
+    config.gateway.auth_required =
+        get_bool(sections, "gateway", "auth_required", config.gateway.auth_required, path);
+    config.gateway.api_key = get_string(sections, "gateway", "api_key", config.gateway.api_key, path);
+    config.gateway.max_in_flight_requests =
+        get_int(sections, "gateway", "max_in_flight_requests", config.gateway.max_in_flight_requests, path);
 
     config.matching.strategy_name =
         get_string(sections, "matching", "strategy_name", config.matching.strategy_name, path);

@@ -89,6 +89,9 @@ struct GatewayConfig {
     int rate_limit_rps_per_device     = 100;
     int timestamp_skew_tolerance_s    = 30;
     int queue_full_timeout_ms         = 500;
+    bool auth_required                = false;
+    std::string api_key;
+    int max_in_flight_requests        = 0; // 0 = unlimited
 };
 
 struct MatchingConfig {

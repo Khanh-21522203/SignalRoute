@@ -64,6 +64,9 @@ max_batch_events = 1000
 rate_limit_rps_per_device = 100
 timestamp_skew_tolerance_s = 30
 queue_full_timeout_ms = 500
+auth_required = false
+api_key = ""
+max_in_flight_requests = 0          # 0 = unlimited
 
 [matching]
 strategy_name = "default"

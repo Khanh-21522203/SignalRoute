@@ -18,6 +18,10 @@ add_executable(test_rate_limiter unit/test_rate_limiter.cpp)
 target_link_libraries(test_rate_limiter PRIVATE sr_gateway)
 add_test(NAME test_rate_limiter COMMAND test_rate_limiter)
 
+add_executable(test_gateway_admission_control unit/test_gateway_admission_control.cpp)
+target_link_libraries(test_gateway_admission_control PRIVATE sr_gateway)
+add_test(NAME test_gateway_admission_control COMMAND test_gateway_admission_control)
+
 add_executable(test_gateway_service unit/test_gateway_service.cpp)
 target_link_libraries(test_gateway_service PRIVATE sr_gateway)
 add_test(NAME test_gateway_service COMMAND test_gateway_service)

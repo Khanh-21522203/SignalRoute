@@ -37,7 +37,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Kafka, Redis, PostGIS, gRPC, real H3, and Prometheus still need package-backed integration verification. Protobuf message generation is optional and integrated behind `SR_ENABLE_PROTOBUF`.
 - Production dependency switches exist; Kafka, Redis, H3, and PostGIS now have gated adapter paths behind existing interfaces, but package-backed compile/runtime verification is pending where local packages are unavailable.
 - Gateway, processor, geofence, matching codec, and DLQ replay boundaries now use shared payload codecs that emit protobuf when `SR_ENABLE_PROTOBUF=ON` and preserve CSV fallback decoding for skeleton tests. Real Kafka broker-backed transport verification is still pending.
-- Gateway has dependency-free transport handler methods, readiness/lifecycle snapshots, and a gated gRPC adapter skeleton; real server binding and UDP endpoint remain pending.
+- Gateway has dependency-free transport handler methods, API-key admission policy, bounded in-flight backpressure contract, readiness/lifecycle snapshots, and a gated gRPC adapter skeleton; real server binding and UDP endpoint remain pending.
 - Query service has dependency-free transport handler methods, readiness/lifecycle snapshots, and a gated gRPC adapter skeleton; real server binding and HTTP endpoint remain pending.
 - Event bus wiring is implemented for the processor/geofence/metrics fallback path, and process startup now owns role-specific services through `RuntimeApplication`. Cross-role production deployment still needs explicit durable Kafka/protobuf boundaries.
 - Geofence fallback flows and matching Kafka fallback request/result flow are implemented; production adapters, real endpoint transports, and admin CRUD are still pending. Admin has a gated gRPC adapter skeleton, but real server binding remains pending.
@@ -245,7 +245,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task H1: Gateway Service
 - **Ownership:** `src/gateway/`, gateway tests.
-- **Status:** Done fallback for direct ingest methods and dependency-free transport-facing request/response handlers; gateway runtime emits protobuf location payloads when `SR_ENABLE_PROTOBUF=ON` and CSV in default fallback builds; gated gRPC adapter skeleton added; real gRPC server binding and UDP endpoint pending.
+- **Status:** Done fallback for direct ingest methods, dependency-free transport-facing request/response handlers, API-key admission policy, bounded in-flight backpressure contract, and feature tests; gateway runtime emits protobuf location payloads when `SR_ENABLE_PROTOBUF=ON` and CSV in default fallback builds; gated gRPC adapter skeleton added; real gRPC server binding and UDP endpoint pending.
 - **Goal:** Implement gRPC/UDP ingestion and event publication.
 - **Items:** service handlers, validation, rate limiting, server timestamp, Kafka publish, in-process event publish for standalone mode.
 - **Depends on:** A1/A2, G1/G2.
@@ -546,13 +546,13 @@ Expose real device ingestion through gRPC and UDP, then publish validated events
 - Implement gRPC `IngestService`. (Gated adapter skeleton done; real server binding pending.)
 - Implement `IngestSingle` and `IngestBatch` handlers. (Transport-neutral handlers and gRPC adapter mapping done.)
 - Validate required fields, coordinates, sequence, timestamp, accuracy, and batch size.
-- Implement API key/auth placeholder or final auth decision.
+- Implement API key/auth placeholder or final auth decision. (Done as configurable API-key admission policy; final production auth provider still optional.)
 - Implement per-device rate limiter with bounded memory.
 - Stamp `server_recv_ms`.
 - Publish accepted events to Kafka using `device_id` as key.
 - Return partial batch rejection details if supported.
 - Implement UDP listener if still in scope.
-- Add backpressure behavior when Kafka is unavailable or producer queue is full.
+- Add backpressure behavior when Kafka is unavailable or producer queue is full. (Done for bounded in-flight transport admission; Kafka producer queue/backpressure mapping pending.)
 - Add gateway metrics.
 
 ### Acceptance Criteria
