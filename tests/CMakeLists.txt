@@ -42,6 +42,10 @@ add_executable(test_admin_service unit/test_admin_service.cpp)
 target_link_libraries(test_admin_service PRIVATE sr_common)
 add_test(NAME test_admin_service COMMAND test_admin_service)
 
+add_executable(test_dependency_health_sources unit/test_dependency_health_sources.cpp)
+target_link_libraries(test_dependency_health_sources PRIVATE sr_common)
+add_test(NAME test_dependency_health_sources COMMAND test_dependency_health_sources)
+
 add_executable(test_admin_endpoint_handler unit/test_admin_endpoint_handler.cpp)
 target_link_libraries(test_admin_endpoint_handler PRIVATE sr_common)
 add_test(NAME test_admin_endpoint_handler COMMAND test_admin_endpoint_handler)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/admin/admin_service.h"
+#include "common/admin/dependency_health.h"
 #include "common/admin/admin_endpoint_handler.h"
 #include "common/admin/admin_http_handler.h"
 #include "common/config/config.h"
@@ -46,6 +47,8 @@ public:
     [[nodiscard]] const RuntimeRoleSelection& roles() const;
     [[nodiscard]] AdminService& admin();
     [[nodiscard]] const AdminService& admin() const;
+    [[nodiscard]] DependencyHealthRegistry& dependency_health_sources();
+    [[nodiscard]] const DependencyHealthRegistry& dependency_health_sources() const;
     [[nodiscard]] bool admin_http_enabled() const;
     [[nodiscard]] const AdminHttpRoutes& admin_http_routes() const;
     [[nodiscard]] AdminHttpResponse handle_admin_http(AdminHttpRequest request) const;
@@ -66,6 +69,7 @@ private:
     std::unique_ptr<AdminService> admin_;
     std::unique_ptr<AdminEndpointHandler> admin_endpoint_;
     std::unique_ptr<AdminHttpHandler> admin_http_;
+    DependencyHealthRegistry dependency_health_;
     GatewayService gateway_;
     ProcessorService processor_;
     QueryService query_;

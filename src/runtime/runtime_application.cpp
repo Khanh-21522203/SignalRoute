@@ -5,22 +5,6 @@
 #include <string>
 #include <utility>
 
-#ifndef SIGNALROUTE_HAS_KAFKA
-#define SIGNALROUTE_HAS_KAFKA 0
-#endif
-
-#ifndef SIGNALROUTE_HAS_REDIS
-#define SIGNALROUTE_HAS_REDIS 0
-#endif
-
-#ifndef SIGNALROUTE_HAS_POSTGIS
-#define SIGNALROUTE_HAS_POSTGIS 0
-#endif
-
-#ifndef SIGNALROUTE_HAS_H3
-#define SIGNALROUTE_HAS_H3 0
-#endif
-
 namespace signalroute {
 namespace {
 
@@ -32,15 +16,6 @@ AdminHttpRoutes routes_from_config(const Config& config) {
     routes.readiness_alias_path = config.observability.readiness_path == "/ready" ? "/readyz" : "/ready";
     routes.metrics_path = config.observability.metrics_path;
     return routes;
-}
-
-ComponentHealth production_adapter_health(std::string name, bool enabled) {
-    return ComponentHealth{
-        std::move(name),
-        enabled,
-        true,
-        enabled ? "production adapter enabled" : "production adapter required but not enabled in this build",
-    };
 }
 
 } // namespace
@@ -57,7 +32,8 @@ RuntimeRoleSelection select_runtime_roles(const Config& config) {
 }
 
 RuntimeApplication::RuntimeApplication()
-    : admin_(std::make_unique<AdminService>("stopped")) {
+    : admin_(std::make_unique<AdminService>("stopped"))
+    , dependency_health_(default_dependency_health_registry()) {
     configure_admin_http();
 }
 
@@ -191,6 +167,14 @@ const AdminService& RuntimeApplication::admin() const {
     return *admin_;
 }
 
+DependencyHealthRegistry& RuntimeApplication::dependency_health_sources() {
+    return dependency_health_;
+}
+
+const DependencyHealthRegistry& RuntimeApplication::dependency_health_sources() const {
+    return dependency_health_;
+}
+
 bool RuntimeApplication::admin_http_enabled() const {
     return config_.observability.admin_http_enabled;
 }
@@ -254,23 +238,23 @@ void RuntimeApplication::register_admin_probes() {
 
 void RuntimeApplication::register_dependency_readiness_probes() {
     if (config_.observability.require_kafka_readiness) {
-        admin_->register_readiness_component("kafka", [] {
-            return production_adapter_health("kafka", SIGNALROUTE_HAS_KAFKA == 1);
+        admin_->register_readiness_component("kafka", [this] {
+            return dependency_health_.readiness_component("kafka");
         });
     }
     if (config_.observability.require_redis_readiness) {
-        admin_->register_readiness_component("redis", [] {
-            return production_adapter_health("redis", SIGNALROUTE_HAS_REDIS == 1);
+        admin_->register_readiness_component("redis", [this] {
+            return dependency_health_.readiness_component("redis");
         });
     }
     if (config_.observability.require_postgis_readiness) {
-        admin_->register_readiness_component("postgis", [] {
-            return production_adapter_health("postgis", SIGNALROUTE_HAS_POSTGIS == 1);
+        admin_->register_readiness_component("postgis", [this] {
+            return dependency_health_.readiness_component("postgis");
         });
     }
     if (config_.observability.require_h3_readiness) {
-        admin_->register_readiness_component("h3", [] {
-            return production_adapter_health("h3", SIGNALROUTE_HAS_H3 == 1);
+        admin_->register_readiness_component("h3", [this] {
+            return dependency_health_.readiness_component("h3");
         });
     }
 }

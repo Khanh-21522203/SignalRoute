@@ -155,6 +155,32 @@ void test_required_dependency_readiness_policy_marks_runtime_unready_but_live() 
     app.stop();
 }
 
+void test_required_dependency_readiness_policy_can_use_custom_health_source() {
+    auto config = config_for_role("query");
+    config.observability.require_redis_readiness = true;
+
+    signalroute::RuntimeApplication app;
+    app.dependency_health_sources().register_source("redis", [] {
+        return signalroute::DependencyHealthSnapshot{"redis", true, "redis adapter reachable"};
+    });
+    app.start(config);
+
+    assert(app.is_running());
+    assert(app.is_healthy());
+    assert(app.is_ready());
+
+    const auto readiness = app.admin().readiness();
+    assert(readiness.healthy);
+    assert(readiness.component_healthy("redis"));
+
+    const auto response = app.handle_admin_http({"GET", "/ready", "application/json"});
+    assert(response.status_code == 200);
+    assert(response.body.find("\"name\":\"redis\"") != std::string::npos);
+    assert(response.body.find("redis adapter reachable") != std::string::npos);
+
+    app.stop();
+}
+
 void test_runtime_startup_failure_is_reported_to_admin_health() {
     signalroute::RuntimeApplication app;
     bool thrown = false;
@@ -190,6 +216,7 @@ int main() {
     test_runtime_exposes_admin_http_handler_with_configured_routes();
     test_runtime_admin_http_can_be_disabled_by_config();
     test_required_dependency_readiness_policy_marks_runtime_unready_but_live();
+    test_required_dependency_readiness_policy_can_use_custom_health_source();
     test_runtime_startup_failure_is_reported_to_admin_health();
     std::cout << "All runtime application tests passed.\n";
     return 0;

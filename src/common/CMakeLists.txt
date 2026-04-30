@@ -4,6 +4,7 @@
 
 add_library(sr_common STATIC
     admin/admin_service.cpp
+    admin/dependency_health.cpp
     admin/admin_endpoint_handler.cpp
     admin/admin_http_handler.cpp
     admin/lifecycle.cpp
