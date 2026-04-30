@@ -1,6 +1,8 @@
 #pragma once
 
 #include "common/admin/admin_service.h"
+#include "common/admin/admin_endpoint_handler.h"
+#include "common/admin/admin_http_handler.h"
 #include "common/config/config.h"
 #include "common/events/event_bus.h"
 #include "gateway/gateway_service.h"
@@ -44,8 +46,12 @@ public:
     [[nodiscard]] const RuntimeRoleSelection& roles() const;
     [[nodiscard]] AdminService& admin();
     [[nodiscard]] const AdminService& admin() const;
+    [[nodiscard]] bool admin_http_enabled() const;
+    [[nodiscard]] const AdminHttpRoutes& admin_http_routes() const;
+    [[nodiscard]] AdminHttpResponse handle_admin_http(AdminHttpRequest request) const;
 
 private:
+    void configure_admin_http();
     void register_runtime_probe();
     void register_admin_probes();
     void register_startup_failure_probe();
@@ -57,6 +63,8 @@ private:
     RuntimeRoleSelection roles_;
     EventBus event_bus_;
     std::unique_ptr<AdminService> admin_;
+    std::unique_ptr<AdminEndpointHandler> admin_endpoint_;
+    std::unique_ptr<AdminHttpHandler> admin_http_;
     GatewayService gateway_;
     ProcessorService processor_;
     QueryService query_;

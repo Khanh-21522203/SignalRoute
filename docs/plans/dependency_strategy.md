@@ -1,7 +1,7 @@
 # SignalRoute Dependency Strategy
 
 ## Purpose
-Batch 17 established the build contract for production dependencies without replacing the fallback runtime. Batch 18 added domain-to-wire conversion contracts. Batch 19 adds protobuf-only generated builds and keeps gRPC stubs optional because local gRPC packages may not be installed. Batch 37 keeps that contract while adding dependency-free admin HTTP response binding.
+Batch 17 established the build contract for production dependencies without replacing the fallback runtime. Batch 18 added domain-to-wire conversion contracts. Batch 19 adds protobuf-only generated builds and keeps gRPC stubs optional because local gRPC packages may not be installed. Batch 38 keeps that contract while exposing dependency-free admin HTTP responses through runtime composition.
 
 ## Default Build Mode
 The default build is fallback mode:
@@ -90,4 +90,4 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
 
 ## Current Boundary
-Batch 37 adds dependency-free admin HTTP-style health/readiness/metrics routing and response serialization over the existing admin endpoint handler. Local fallback and protobuf builds pass. The gRPC configure check still fails clearly at `find_package(gRPC)` because local gRPC CMake packages are not installed, so package-backed adapter compile verification remains pending. gRPC service stubs and adapters remain gated by `SR_ENABLE_GRPC`.
+Batch 38 adds observability config for admin HTTP routes and exposes dependency-free admin health/readiness/metrics responses through `RuntimeApplication` without opening sockets. Local fallback and protobuf builds pass. The gRPC configure check still fails clearly at `find_package(gRPC)` because local gRPC CMake packages are not installed, so package-backed adapter compile verification remains pending. gRPC service stubs and adapters remain gated by `SR_ENABLE_GRPC`.

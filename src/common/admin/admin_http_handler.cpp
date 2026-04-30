@@ -6,12 +6,15 @@
 namespace signalroute {
 namespace {
 
-bool is_health_path(const std::string& path) {
-    return path == "/health" || path == "/healthz" || path == "/ready" || path == "/readyz";
+bool is_health_path(const std::string& path, const AdminHttpRoutes& routes) {
+    return path == routes.health_path ||
+           path == routes.health_alias_path ||
+           path == routes.readiness_path ||
+           path == routes.readiness_alias_path;
 }
 
-bool is_metrics_path(const std::string& path) {
-    return path == "/metrics";
+bool is_metrics_path(const std::string& path, const AdminHttpRoutes& routes) {
+    return path == routes.metrics_path;
 }
 
 bool method_can_route(const std::string& method) {
@@ -26,21 +29,25 @@ void add_standard_headers(AdminHttpResponse& response) {
 
 } // namespace
 
-AdminHttpHandler::AdminHttpHandler(AdminEndpointHandler& endpoint_handler)
-    : endpoint_handler_(endpoint_handler) {}
+AdminHttpHandler::AdminHttpHandler(AdminEndpointHandler& endpoint_handler, AdminHttpRoutes routes)
+    : endpoint_handler_(endpoint_handler), routes_(std::move(routes)) {}
 
 AdminHttpResponse AdminHttpHandler::handle(AdminHttpRequest request) const {
     const bool include_body = request.method != "HEAD";
     if (!method_can_route(request.method)) {
         return method_not_allowed(include_body);
     }
-    if (is_health_path(request.path)) {
+    if (is_health_path(request.path, routes_)) {
         return endpoint_to_http(endpoint_handler_.handle_health({request.accept}), include_body);
     }
-    if (is_metrics_path(request.path)) {
+    if (is_metrics_path(request.path, routes_)) {
         return endpoint_to_http(endpoint_handler_.handle_metrics({request.accept}), include_body);
     }
     return not_found(include_body);
+}
+
+const AdminHttpRoutes& AdminHttpHandler::routes() const {
+    return routes_;
 }
 
 AdminHttpResponse AdminHttpHandler::endpoint_to_http(AdminEndpointResponse response, bool include_body) const {

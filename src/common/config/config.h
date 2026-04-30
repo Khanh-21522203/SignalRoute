@@ -114,6 +114,9 @@ struct ObservabilityConfig {
     int         metrics_port = 9100;
     std::string metrics_path = "/metrics";
     std::string log_level    = "info";
+    bool        admin_http_enabled = true;
+    std::string health_path = "/health";
+    std::string readiness_path = "/ready";
 };
 
 /**

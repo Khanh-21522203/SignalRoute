@@ -268,6 +268,13 @@ void require_port(int value, const std::string& name) {
     }
 }
 
+void require_path(const std::string& value, const std::string& name) {
+    require_non_empty(value, name);
+    if (value.front() != '/') {
+        throw std::runtime_error("Invalid config: " + name + " must start with /");
+    }
+}
+
 void validate_config(const Config& config) {
     const std::set<std::string> roles = {
         "standalone", "gateway", "processor", "query", "geofence", "matcher",
@@ -344,7 +351,9 @@ void validate_config(const Config& config) {
 
     require_non_empty(config.observability.metrics_addr, "observability.metrics_addr");
     require_port(config.observability.metrics_port, "observability.metrics_port");
-    require_non_empty(config.observability.metrics_path, "observability.metrics_path");
+    require_path(config.observability.metrics_path, "observability.metrics_path");
+    require_path(config.observability.health_path, "observability.health_path");
+    require_path(config.observability.readiness_path, "observability.readiness_path");
     const std::set<std::string> log_levels = {"trace", "debug", "info", "warn", "error"};
     if (!log_levels.contains(config.observability.log_level)) {
         throw std::runtime_error("Invalid config: observability.log_level is not supported: " +
@@ -466,6 +475,12 @@ Config Config::load(const std::string& path) {
         get_string(sections, "observability", "metrics_path", config.observability.metrics_path, path);
     config.observability.log_level =
         get_string(sections, "observability", "log_level", config.observability.log_level, path);
+    config.observability.admin_http_enabled =
+        get_bool(sections, "observability", "admin_http_enabled", config.observability.admin_http_enabled, path);
+    config.observability.health_path =
+        get_string(sections, "observability", "health_path", config.observability.health_path, path);
+    config.observability.readiness_path =
+        get_string(sections, "observability", "readiness_path", config.observability.readiness_path, path);
 
     config.validate();
     return config;

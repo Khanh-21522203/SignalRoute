@@ -3,8 +3,22 @@
 #include <exception>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace signalroute {
+namespace {
+
+AdminHttpRoutes routes_from_config(const Config& config) {
+    AdminHttpRoutes routes;
+    routes.health_path = config.observability.health_path;
+    routes.health_alias_path = config.observability.health_path == "/health" ? "/healthz" : "/health";
+    routes.readiness_path = config.observability.readiness_path;
+    routes.readiness_alias_path = config.observability.readiness_path == "/ready" ? "/readyz" : "/ready";
+    routes.metrics_path = config.observability.metrics_path;
+    return routes;
+}
+
+} // namespace
 
 RuntimeRoleSelection select_runtime_roles(const Config& config) {
     const auto& role = config.server.role;
@@ -18,7 +32,9 @@ RuntimeRoleSelection select_runtime_roles(const Config& config) {
 }
 
 RuntimeApplication::RuntimeApplication()
-    : admin_(std::make_unique<AdminService>("stopped")) {}
+    : admin_(std::make_unique<AdminService>("stopped")) {
+    configure_admin_http();
+}
 
 RuntimeApplication::~RuntimeApplication() {
     if (running_) {
@@ -33,6 +49,7 @@ void RuntimeApplication::start(const Config& config) {
 
     config_ = config;
     admin_ = std::make_unique<AdminService>(config_.server.role.empty() ? "invalid" : config_.server.role);
+    configure_admin_http();
     startup_failed_ = false;
     last_start_error_.clear();
     roles_ = RuntimeRoleSelection{};
@@ -143,6 +160,34 @@ AdminService& RuntimeApplication::admin() {
 
 const AdminService& RuntimeApplication::admin() const {
     return *admin_;
+}
+
+bool RuntimeApplication::admin_http_enabled() const {
+    return config_.observability.admin_http_enabled;
+}
+
+const AdminHttpRoutes& RuntimeApplication::admin_http_routes() const {
+    return admin_http_->routes();
+}
+
+AdminHttpResponse RuntimeApplication::handle_admin_http(AdminHttpRequest request) const {
+    if (!admin_http_enabled()) {
+        AdminHttpResponse response;
+        response.status_code = 404;
+        response.reason_phrase = reason_phrase_for_status(response.status_code);
+        response.content_type = "application/json";
+        response.body = R"({"error":"admin http disabled"})";
+        response.headers.emplace_back("Content-Type", response.content_type);
+        response.headers.emplace_back("Content-Length", std::to_string(response.body.size()));
+        response.headers.emplace_back("Cache-Control", "no-store");
+        return response;
+    }
+    return admin_http_->handle(std::move(request));
+}
+
+void RuntimeApplication::configure_admin_http() {
+    admin_endpoint_ = std::make_unique<AdminEndpointHandler>(*admin_);
+    admin_http_ = std::make_unique<AdminHttpHandler>(*admin_endpoint_, routes_from_config(config_));
 }
 
 void RuntimeApplication::register_runtime_probe() {

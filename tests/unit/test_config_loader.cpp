@@ -56,6 +56,9 @@ void test_loads_canonical_config() {
     assert(config.gateway.api_key.empty());
     assert(config.gateway.max_in_flight_requests == 0);
     assert(config.matching.request_topic == "sr.match.requests");
+    assert(config.observability.admin_http_enabled);
+    assert(config.observability.health_path == "/health");
+    assert(config.observability.readiness_path == "/ready");
     assert(config.observability.log_level == "info");
 }
 
@@ -84,6 +87,12 @@ nearby_max_radius_m = 123.5
 auth_required = true
 api_key = "secret"
 max_in_flight_requests = 8
+
+[observability]
+metrics_path = "/custom-metrics"
+admin_http_enabled = false
+health_path = "/live"
+readiness_path = "/ready-custom"
 )toml");
 
     const auto config = signalroute::Config::load(path.string());
@@ -100,6 +109,10 @@ max_in_flight_requests = 8
     assert(config.gateway.auth_required);
     assert(config.gateway.api_key == "secret");
     assert(config.gateway.max_in_flight_requests == 8);
+    assert(config.observability.metrics_path == "/custom-metrics");
+    assert(!config.observability.admin_http_enabled);
+    assert(config.observability.health_path == "/live");
+    assert(config.observability.readiness_path == "/ready-custom");
 }
 
 void test_missing_file_is_rejected() {
@@ -163,6 +176,17 @@ max_in_flight_requests = -1
     });
 }
 
+void test_observability_paths_must_start_with_slash() {
+    const auto path = write_config("signalroute_config_invalid_observability_path.toml", minimal_valid_config() + R"toml(
+[observability]
+health_path = "health"
+)toml");
+
+    expect_throws([&] {
+        (void)signalroute::Config::load(path.string());
+    });
+}
+
 void test_post_load_override_validation_uses_same_rules() {
     const auto path = write_config("signalroute_config_post_load_override.toml", minimal_valid_config());
     auto config = signalroute::Config::load(path.string());
@@ -183,6 +207,7 @@ int main() {
     test_invalid_value_type_is_rejected();
     test_auth_required_without_api_key_is_rejected();
     test_negative_in_flight_limit_is_rejected();
+    test_observability_paths_must_start_with_slash();
     test_post_load_override_validation_uses_same_rules();
     std::cout << "All config loader tests passed.\n";
     return 0;

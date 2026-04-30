@@ -85,6 +85,46 @@ void test_gateway_runtime_registers_only_gateway_probe() {
     app.stop();
 }
 
+void test_runtime_exposes_admin_http_handler_with_configured_routes() {
+    auto config = config_for_role("query");
+    config.observability.metrics_path = "/ops/metrics";
+    config.observability.health_path = "/live";
+    config.observability.readiness_path = "/ready-custom";
+
+    signalroute::RuntimeApplication app;
+    app.start(config);
+
+    assert(app.admin_http_enabled());
+    assert(app.admin_http_routes().health_path == "/live");
+    assert(app.admin_http_routes().readiness_path == "/ready-custom");
+    assert(app.admin_http_routes().metrics_path == "/ops/metrics");
+
+    auto response = app.handle_admin_http({"GET", "/live", "application/json"});
+    assert(response.status_code == 200);
+    assert(response.body.find("\"role\":\"query\"") != std::string::npos);
+
+    response = app.handle_admin_http({"GET", "/ops/metrics", "text/plain"});
+    assert(response.status_code == 200);
+    assert(response.content_type == "text/plain; version=0.0.4");
+
+    app.stop();
+}
+
+void test_runtime_admin_http_can_be_disabled_by_config() {
+    auto config = config_for_role("query");
+    config.observability.admin_http_enabled = false;
+
+    signalroute::RuntimeApplication app;
+    app.start(config);
+
+    assert(!app.admin_http_enabled());
+    const auto response = app.handle_admin_http({"GET", "/health", "application/json"});
+    assert(response.status_code == 404);
+    assert(response.body == R"({"error":"admin http disabled"})");
+
+    app.stop();
+}
+
 void test_runtime_startup_failure_is_reported_to_admin_health() {
     signalroute::RuntimeApplication app;
     bool thrown = false;
@@ -117,6 +157,8 @@ int main() {
     test_role_selection_respects_role_and_geofence_flag();
     test_query_runtime_registers_admin_probes_and_stops_cleanly();
     test_gateway_runtime_registers_only_gateway_probe();
+    test_runtime_exposes_admin_http_handler_with_configured_routes();
+    test_runtime_admin_http_can_be_disabled_by_config();
     test_runtime_startup_failure_is_reported_to_admin_health();
     std::cout << "All runtime application tests passed.\n";
     return 0;
