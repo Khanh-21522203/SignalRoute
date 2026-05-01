@@ -51,7 +51,7 @@ ThreadSanitizer is intentionally mutually exclusive with ASan/UBSan in `cmake/Si
 | protobuf-unit | yes | `.github/workflows/ci.yml` installs only protobuf packages, then runs protobuf configure/build/CTest |
 | asan-ubsan | yes | `.github/workflows/ci.yml` runs focused sanitizer smoke with `ASAN_OPTIONS=detect_leaks=0` |
 | dependency-service-scaffold | manual | `workflow_dispatch` with `run_dependency_scaffold=true`; validates Redis, PostGIS, Redpanda, Compose config, and fallback runtime build smoke |
-| adapter-image-scaffold | optional/manual | Build `Dockerfile.adapters` or `docker buildx bake adapter-scaffold` with all real adapter switches off |
+| adapter-image-scaffold | manual | `workflow_dispatch` with `run_adapter_image_scaffold=true`; build and smoke-test `Dockerfile.adapters`/`docker buildx bake adapter-scaffold` with all real adapter switches off |
 | tsan-smoke | optional/manual | configure/build with `-DSR_ENABLE_TSAN=ON`; select focused concurrency tests first |
 | grpc-package | no | Enable after `gRPC::grpc++` and `gRPC::grpc_cpp_plugin` are installed |
 | kafka-integration | no | Enable after RdKafka package and broker service are available |
@@ -67,10 +67,13 @@ Current jobs:
 - `protobuf-unit`: installs `libprotobuf-dev` and `protobuf-compiler`, then runs protobuf configure/build/CTest.
 - `asan-ubsan`: dependency-free focused sanitizer smoke over admin HTTP, config, and runtime application tests.
 - `dependency-service-scaffold`: manual-only service scaffold that starts Redis and PostGIS as GitHub Actions services, starts Redpanda through Docker, validates service readiness, validates `compose.yml`, and builds a focused fallback runtime smoke.
+- `adapter-image-scaffold`: manual-only image scaffold job that validates the Docker Bake target, builds `signalroute:adapter-scaffold`, checks the binary exists, and runs a short fallback runtime smoke.
 
 Run the manual scaffold from GitHub Actions with `workflow_dispatch` and `run_dependency_scaffold=true`. This job does not set `SR_ENABLE_REAL_KAFKA`, `SR_ENABLE_REAL_REDIS`, `SR_ENABLE_REAL_POSTGIS`, or `SR_ENABLE_REAL_H3`; it proves service provisioning only. Package-backed adapter jobs remain separate until the corresponding CMake packages are available.
 
 Future adapter CI jobs should build from `Dockerfile.adapters` or `docker-bake.hcl` targets. Keep `adapter-scaffold` package-free and fallback-safe. Add package-backed targets only when the CI job also installs/provides the matching CMake package targets and runs feature-grouped integration tests.
 
+Run the adapter image scaffold from GitHub Actions with `workflow_dispatch` and `run_adapter_image_scaffold=true`. This job does not install adapter packages and does not enable real adapter switches.
+
 ## Current Boundary
-Batch 53 adds adapter image scaffolding outside the default CI path. Default push and pull request CI remains dependency-free fallback, protobuf, and focused ASan+UBSan. Real dependency-backed adapter jobs remain pending until package installation and integration tests are added.
+Batch 54 adds a manual hosted CI job for the adapter image scaffold. Default push and pull request CI remains dependency-free fallback, protobuf, and focused ASan+UBSan. Real dependency-backed adapter jobs remain pending until package installation and integration tests are added.

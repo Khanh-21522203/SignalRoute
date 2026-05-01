@@ -10,7 +10,7 @@ This file defines the preparation required before running multiple agents or dev
 - Durable cross-process communication remains Kafka.
 - The tracked completion roadmap is `docs/plans/finish_plan.md`.
 - Dependency strategy is tracked in `docs/plans/dependency_strategy.md`.
-- Hosted CI plus local sanitizer commands are tracked in `docs/plans/ci_and_sanitizers.md`; use `scripts/verify-local.sh` for dependency-free fallback/protobuf verification. A manual dependency service scaffold exists for Redis/PostGIS/Redpanda provisioning checks, but it does not enable real adapter switches.
+- Hosted CI plus local sanitizer commands are tracked in `docs/plans/ci_and_sanitizers.md`; use `scripts/verify-local.sh` for dependency-free fallback/protobuf verification. Manual dependency service and adapter image scaffold jobs exist for Redis/PostGIS/Redpanda provisioning and fallback-safe adapter image checks, but they do not enable real adapter switches.
 - Production fallback container packaging, adapter image scaffolding, and Docker Compose dependency scaffolding are tracked in `docs/plans/container_packaging.md`; real adapter wiring remains a separate future scope.
 - Gateway, processor, geofence, matching payload codecs, and DLQ replay use shared codecs. Protobuf payloads are emitted when `SR_ENABLE_PROTOBUF=ON`; CSV remains fallback-build scaffolding and decoder compatibility.
 - Gateway and query now expose dependency-free transport-facing request/response handlers over existing service methods plus gated gRPC adapter skeletons. Gateway transport handlers also have optional API-key admission and bounded in-flight backpressure contracts. Real gRPC server binding and UDP/HTTP endpoints remain pending.

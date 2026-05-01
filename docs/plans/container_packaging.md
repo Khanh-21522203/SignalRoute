@@ -139,5 +139,16 @@ That job:
 - verifies service readiness with `redis-cli`, `pg_isready`/`psql`, and `rpk`;
 - builds a focused fallback runtime smoke without enabling real adapter CMake switches.
 
+## CI Adapter Image Scaffold
+The GitHub Actions workflow also includes a manual `adapter-image-scaffold` job. Start it with `workflow_dispatch` and `run_adapter_image_scaffold=true`.
+
+That job:
+- validates the `adapter-scaffold` Docker Bake target;
+- builds `signalroute:adapter-scaffold` from `Dockerfile.adapters`;
+- verifies the packaged binary exists;
+- runs a short query-role fallback runtime smoke and expects timeout exit `124` after clean SIGTERM.
+
+Important boundary: this job verifies the image path only. It does not install adapter packages and does not enable real adapter switches.
+
 ## Current Boundary
-The default image proves reproducible packaging for the fallback runtime, `Dockerfile.adapters` provides a repeatable image path for future package-backed builds, Compose provides local dependency containers, and CI can manually validate dependency service provisioning. Real dependency-backed integration tests remain pending until package installation and adapter-specific integration tests are ready.
+The default image proves reproducible packaging for the fallback runtime, `Dockerfile.adapters` provides a repeatable image path for future package-backed builds, Compose provides local dependency containers, and CI can manually validate dependency service provisioning plus the adapter scaffold image path. Real dependency-backed integration tests remain pending until package installation and adapter-specific integration tests are ready.

@@ -313,7 +313,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task O1: Packaging And CI
 - **Ownership:** Docker/CI/build docs.
-- **Status:** Local fallback/protobuf verification script, hosted fallback/protobuf/sanitizer CI workflow, manual dependency service scaffold, production fallback Dockerfile, adapter image scaffold, Docker Compose dependency scaffold, container runtime contract, and sanitizer CMake profiles added; package-backed adapter images and integration jobs pending.
+- **Status:** Local fallback/protobuf verification script, hosted fallback/protobuf/sanitizer CI workflow, manual dependency service scaffold, manual adapter image scaffold job, production fallback Dockerfile, adapter image scaffold, Docker Compose dependency scaffold, container runtime contract, and sanitizer CMake profiles added; package-backed adapter images and integration jobs pending.
 - **Goal:** Make the project reproducible.
 - **Items:** Docker Compose, production Dockerfile, CI build/test/integration jobs, sanitizer profile.
 - **Depends on:** C2 and enough integration tests to run in CI.
@@ -791,7 +791,7 @@ Make the project reproducible for development, CI, and production deployment.
   - unit tests
   - integration tests with services
   - static analysis if available
-  - Status: hosted workflow runs fallback, protobuf, and focused ASan+UBSan smoke jobs. Local CI-equivalent script runs fallback and protobuf configure/build/CTest without installing dependencies. Manual dependency service scaffold verifies Redis/PostGIS/Redpanda service provisioning; real adapter integration jobs remain pending.
+  - Status: hosted workflow runs fallback, protobuf, and focused ASan+UBSan smoke jobs. Local CI-equivalent script runs fallback and protobuf configure/build/CTest without installing dependencies. Manual dependency service scaffold verifies Redis/PostGIS/Redpanda service provisioning, and manual adapter image scaffold verifies the fallback-safe image path; real adapter integration jobs remain pending.
 - Add sanitizers profile for local/CI runs.
   - Status: CMake switches added for ASan, UBSan, and TSan. ASan+UBSan is the default sanitizer profile; TSan is intentionally separate.
 - Add benchmark/load test entrypoints.

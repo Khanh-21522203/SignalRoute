@@ -11,6 +11,11 @@ on:
         required: false
         type: boolean
         default: false
+      run_adapter_image_scaffold:
+        description: Build and smoke-test the fallback-safe adapter image scaffold
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -167,3 +172,34 @@ jobs:
         run: |
           docker logs signalroute-redpanda || true
           docker rm -f signalroute-redpanda || true
+
+  adapter-image-scaffold:
+    name: adapter image scaffold
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_adapter_image_scaffold }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Bake target
+        run: docker buildx bake --print adapter-scaffold
+
+      - name: Build adapter scaffold image
+        run: docker buildx bake adapter-scaffold
+
+      - name: Verify adapter scaffold binary
+        run: docker run --rm --entrypoint /bin/sh signalroute:adapter-scaffold -c 'test -x /usr/local/bin/signalroute'
+
+      - name: Smoke adapter scaffold runtime
+        run: |
+          set +e
+          timeout 3s docker run --rm signalroute:adapter-scaffold \
+            --config=/etc/signalroute/signalroute.toml \
+            --role=query
+          status=$?
+          set -e
+          if [ "${status}" -ne 124 ]; then
+            echo "expected timeout exit 124 after clean SIGTERM, got ${status}"
+            exit 1
+          fi
