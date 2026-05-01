@@ -28,7 +28,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Dependency-free runtime application composition root that owns role-specific services, validates post-load runtime config, registers process-level admin lifecycle probes, reports startup failures through admin health, aggregates health/readiness, and centralizes graceful stop order.
 - Dependency-free structured logfmt event formatter used by process startup, shutdown, unhealthy, signal, and fatal paths.
 - Fallback-first dependency build switches in `cmake/SignalRouteOptions.cmake` and central discovery/linking in `cmake/SignalRouteDependencies.cmake`.
-- Dependency-free local CI verification script, hosted fallback/protobuf/sanitizer CI workflow, production fallback Dockerfile, container runtime contract, and CMake sanitizer profiles for ASan, UBSan, and TSan.
+- Dependency-free local CI verification script, hosted fallback/protobuf/sanitizer CI workflow, production fallback Dockerfile, Docker Compose dependency scaffold, container runtime contract, and CMake sanitizer profiles for ASan, UBSan, and TSan.
 - Stable `signalroute_proto` target that is an interface target in fallback mode, a generated protobuf message library when `SR_ENABLE_PROTOBUF=ON`, and a generated gRPC stub library when `SR_ENABLE_GRPC=ON`.
 - Gated `sr_grpc_transport` adapter target for admin, gateway ingest, and query services; it only compiles when `SR_ENABLE_GRPC=ON`.
 - Dependency-free domain-to-wire conversion contracts under `src/common/proto/` for location, query device state, geofence events, and matching request/result payloads.
@@ -313,7 +313,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task O1: Packaging And CI
 - **Ownership:** Docker/CI/build docs.
-- **Status:** Local fallback/protobuf verification script, hosted fallback/protobuf/sanitizer CI workflow, production fallback Dockerfile, container runtime contract, and sanitizer CMake profiles added; Docker Compose and dependency-backed jobs pending.
+- **Status:** Local fallback/protobuf verification script, hosted fallback/protobuf/sanitizer CI workflow, production fallback Dockerfile, Docker Compose dependency scaffold, container runtime contract, and sanitizer CMake profiles added; real-adapter images and dependency-backed jobs pending.
 - **Goal:** Make the project reproducible.
 - **Items:** Docker Compose, production Dockerfile, CI build/test/integration jobs, sanitizer profile.
 - **Depends on:** C2 and enough integration tests to run in CI.
@@ -778,6 +778,7 @@ Make the project reproducible for development, CI, and production deployment.
   - Kafka or Redpanda
   - Redis
   - TimescaleDB/PostGIS
+  - Status: `compose.yml` adds Redis, PostGIS, and Redpanda with healthchecks and named volumes. SignalRoute service is profile-gated and still runs fallback runtime by default.
 - Add production Dockerfile.
   - Status: multi-stage Ubuntu 24.04 Dockerfile builds the fallback runtime with `SR_BUILD_TESTS=OFF` and runs as an unprivileged `signalroute` user.
 - Add CI pipeline:
@@ -794,7 +795,7 @@ Make the project reproducible for development, CI, and production deployment.
 ### Acceptance Criteria
 - New machine can build from documented commands.
 - CI fails on compile/test regressions.
-- Local integration environment starts with one command. (Pending Docker Compose service dependencies.)
+- Local integration environment starts with one command. (Compose dependency scaffold added; real adapter integration still pending.)
 - Production image runs with a mounted config. (Fallback image contract documented; container smoke verifies binary startup.)
 
 ### Test Targets

@@ -1,0 +1,81 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgis:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: signalroute
+      POSTGRES_USER: sr_user
+      POSTGRES_PASSWORD: sr_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgis-data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sr_user -d signalroute"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=internal://0.0.0.0:29092,external://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://redpanda:29092,external://localhost:9092
+    ports:
+      - "9092:9092"
+      - "9644:9644"
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health --api-urls=localhost:9644 | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  signalroute:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: signalroute:local
+    command: ["--config=/etc/signalroute/signalroute.toml"]
+    ports:
+      - "9090:9090"
+      - "9091:9091"
+      - "9100:9100"
+      - "9101:9101"
+    volumes:
+      - ./config/signalroute.docker.toml:/etc/signalroute/signalroute.toml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+
+volumes:
+  redis-data:
+  postgis-data:
+  redpanda-data:

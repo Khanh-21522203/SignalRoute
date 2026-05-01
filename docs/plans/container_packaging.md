@@ -1,7 +1,7 @@
 # Container Packaging Plan
 
 ## Purpose
-This document records the current production image contract for SignalRoute. Batch 49 provides a dependency-free fallback runtime image. Docker Compose for Kafka/Redis/PostGIS/H3-backed integration remains a later task.
+This document records the current production image and local dependency scaffold for SignalRoute. The production image remains a dependency-free fallback runtime. Docker Compose now provides Redis, PostGIS, and Redpanda services for local environment scaffolding, but real adapters are still disabled unless future production images and CMake switches enable them.
 
 ## Image Build
 Build the production fallback image from the repository root:
@@ -56,5 +56,43 @@ Exposed ports:
 - Runtime working directory is `/var/lib/signalroute`.
 - Build tools are not copied into the runtime stage.
 
+## Docker Compose Dependency Scaffold
+Start local dependency services only:
+
+```sh
+docker compose -f compose.yml up -d redis postgis redpanda
+```
+
+Check the resolved Compose model:
+
+```sh
+docker compose -f compose.yml config
+```
+
+Stop services while keeping named volumes:
+
+```sh
+docker compose -f compose.yml down
+```
+
+Remove services and local data volumes:
+
+```sh
+docker compose -f compose.yml down -v
+```
+
+The `signalroute` service is profile-gated so dependency services can start without running the application:
+
+```sh
+docker compose -f compose.yml --profile app up signalroute
+```
+
+The profile-mounted config is `config/signalroute.docker.toml`. It points to Compose service hostnames:
+- Kafka-compatible broker: `redpanda:29092`
+- Redis: `redis:6379`
+- PostGIS: `postgis:5432`
+
+Important boundary: this config does not enable real adapters by itself. The current Docker image is still built without `SR_ENABLE_REAL_KAFKA`, `SR_ENABLE_REAL_REDIS`, `SR_ENABLE_REAL_POSTGIS`, or `SR_ENABLE_REAL_H3`.
+
 ## Current Boundary
-The image proves reproducible packaging for the fallback runtime. Production adapter images and Docker Compose service dependencies remain pending until package/service provisioning is ready.
+The image proves reproducible packaging for the fallback runtime, and Compose provides local dependency containers for future adapter integration. Production adapter images and real dependency-backed integration tests remain pending until package/service provisioning is ready.

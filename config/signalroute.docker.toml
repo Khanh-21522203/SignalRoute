@@ -1,0 +1,98 @@
+# SignalRoute Docker Compose configuration.
+# This points at Compose service hostnames but still runs the fallback runtime
+# unless real adapter CMake switches and production images are introduced.
+
+[server]
+role = "standalone"
+listen_addr = "0.0.0.0"
+grpc_port = 9090
+udp_port = 9091
+
+[kafka]
+brokers = "redpanda:29092"
+ingest_topic = "tm.location.events"
+geofence_topic = "tm.geofence.events"
+dlq_topic = "tm.location.dlq"
+consumer_group = "signalroute-processor"
+num_partitions = 16
+batch_size_bytes = 65536
+linger_ms = 5
+
+[redis]
+addrs = "redis:6379"
+pool_size = 32
+connect_timeout_ms = 1000
+read_timeout_ms = 500
+key_prefix = "sr"
+device_ttl_s = 3600
+
+[postgis]
+dsn = "host=postgis port=5432 dbname=signalroute user=sr_user password=sr_pass"
+pool_size = 16
+write_batch_size = 500
+write_flush_interval_ms = 500
+query_timeout_ms = 5000
+
+[processor]
+dedup_ttl_s = 300
+dedup_max_entries = 500000
+sequence_guard_enabled = true
+out_of_order_tolerance_s = 60
+history_batch_size = 500
+history_flush_interval_ms = 500
+history_buffer_max_rows = 10000
+redis_max_retries = 3
+redis_backoff_max_ms = 5000
+
+[spatial]
+h3_resolution = 7
+nearby_max_results = 1000
+nearby_max_radius_m = 50000.0
+h3_cache_size_mb = 64
+
+[geofence]
+eval_enabled = true
+dwell_threshold_s = 300
+max_fences = 10000
+reload_interval_s = 60
+
+[gateway]
+max_batch_events = 1000
+rate_limit_rps_per_device = 100
+timestamp_skew_tolerance_s = 30
+queue_full_timeout_ms = 500
+auth_required = false
+api_key = ""
+max_in_flight_requests = 0
+
+[matching]
+strategy_name = "default"
+request_topic = "sr.match.requests"
+result_topic = "sr.match.results"
+request_ttl_ms = 5000
+
+[threads]
+io_threads = 0
+processor_threads = 0
+geofence_eval_threads = 4
+blocking_pool_size = 16
+
+[observability]
+metrics_addr = "0.0.0.0"
+metrics_port = 9100
+metrics_path = "/metrics"
+admin_http_enabled = true
+admin_socket_enabled = false
+admin_socket_addr = "127.0.0.1"
+admin_socket_port = 9101
+admin_socket_backlog = 16
+admin_request_timeout_ms = 1000
+admin_max_request_bytes = 8192
+admin_access_log_enabled = false
+health_path = "/health"
+readiness_path = "/ready"
+require_kafka_readiness = false
+require_redis_readiness = false
+require_postgis_readiness = false
+require_h3_readiness = false
+log_level = "info"
