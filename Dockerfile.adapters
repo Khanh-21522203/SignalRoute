@@ -1,0 +1,89 @@
+# syntax=docker/dockerfile:1
+
+ARG UBUNTU_VERSION=24.04
+
+FROM ubuntu:${UBUNTU_VERSION} AS adapter-build
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG CMAKE_BUILD_TYPE=Release
+ARG CMAKE_PREFIX_PATH=""
+ARG CMAKE_TOOLCHAIN_FILE=""
+ARG SR_DEPENDENCY_PROVIDER=system
+ARG SR_BUILD_TESTS=OFF
+ARG SR_ENABLE_PROTOBUF=OFF
+ARG SR_ENABLE_GRPC=OFF
+ARG SR_ENABLE_REAL_H3=OFF
+ARG SR_ENABLE_REAL_REDIS=OFF
+ARG SR_ENABLE_REAL_POSTGIS=OFF
+ARG SR_ENABLE_REAL_KAFKA=OFF
+ARG SR_ENABLE_PROMETHEUS=OFF
+ARG SR_ENABLE_TOMLPLUSPLUS=OFF
+ARG SR_ADAPTER_APT_PACKAGES=""
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        cmake \
+        g++ \
+        make \
+        pkg-config \
+    && if [ -n "${SR_ADAPTER_APT_PACKAGES}" ]; then \
+        apt-get install -y --no-install-recommends ${SR_ADAPTER_APT_PACKAGES}; \
+    fi \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY . .
+
+RUN cmake_args="-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+        -DSR_DEPENDENCY_PROVIDER=${SR_DEPENDENCY_PROVIDER} \
+        -DSR_BUILD_TESTS=${SR_BUILD_TESTS} \
+        -DSR_ENABLE_PROTOBUF=${SR_ENABLE_PROTOBUF} \
+        -DSR_ENABLE_GRPC=${SR_ENABLE_GRPC} \
+        -DSR_ENABLE_REAL_H3=${SR_ENABLE_REAL_H3} \
+        -DSR_ENABLE_REAL_REDIS=${SR_ENABLE_REAL_REDIS} \
+        -DSR_ENABLE_REAL_POSTGIS=${SR_ENABLE_REAL_POSTGIS} \
+        -DSR_ENABLE_REAL_KAFKA=${SR_ENABLE_REAL_KAFKA} \
+        -DSR_ENABLE_PROMETHEUS=${SR_ENABLE_PROMETHEUS} \
+        -DSR_ENABLE_TOMLPLUSPLUS=${SR_ENABLE_TOMLPLUSPLUS}" \
+    && if [ -n "${CMAKE_PREFIX_PATH}" ]; then \
+        cmake_args="${cmake_args} -DCMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}"; \
+    fi \
+    && if [ -n "${CMAKE_TOOLCHAIN_FILE}" ]; then \
+        cmake_args="${cmake_args} -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}"; \
+    fi \
+    && cmake -S . -B /tmp/signalroute-adapter-build ${cmake_args} \
+    && cmake --build /tmp/signalroute-adapter-build -j2 --target signalroute
+
+FROM ubuntu:${UBUNTU_VERSION} AS runtime
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG SR_ADAPTER_RUNTIME_APT_PACKAGES=""
+ARG SIGNALROUTE_CONFIG_SOURCE=config/signalroute.docker.toml
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        libstdc++6 \
+    && if [ -n "${SR_ADAPTER_RUNTIME_APT_PACKAGES}" ]; then \
+        apt-get install -y --no-install-recommends ${SR_ADAPTER_RUNTIME_APT_PACKAGES}; \
+    fi \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --create-home --home-dir /var/lib/signalroute --shell /usr/sbin/nologin signalroute \
+    && mkdir -p /etc/signalroute \
+    && chown -R signalroute:signalroute /etc/signalroute /var/lib/signalroute
+
+COPY --from=adapter-build /tmp/signalroute-adapter-build/signalroute /usr/local/bin/signalroute
+COPY --from=adapter-build /src/${SIGNALROUTE_CONFIG_SOURCE} /etc/signalroute/signalroute.toml
+
+LABEL org.opencontainers.image.title="SignalRoute adapter runtime" \
+      org.opencontainers.image.description="SignalRoute runtime image scaffold for package-backed production adapters" \
+      org.opencontainers.image.source="https://github.com/signalroute/signalroute"
+
+USER signalroute
+WORKDIR /var/lib/signalroute
+
+EXPOSE 9090 9091 9100 9101
+
+ENTRYPOINT ["/usr/local/bin/signalroute"]
+CMD ["--config=/etc/signalroute/signalroute.toml"]

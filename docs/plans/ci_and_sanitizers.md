@@ -51,6 +51,7 @@ ThreadSanitizer is intentionally mutually exclusive with ASan/UBSan in `cmake/Si
 | protobuf-unit | yes | `.github/workflows/ci.yml` installs only protobuf packages, then runs protobuf configure/build/CTest |
 | asan-ubsan | yes | `.github/workflows/ci.yml` runs focused sanitizer smoke with `ASAN_OPTIONS=detect_leaks=0` |
 | dependency-service-scaffold | manual | `workflow_dispatch` with `run_dependency_scaffold=true`; validates Redis, PostGIS, Redpanda, Compose config, and fallback runtime build smoke |
+| adapter-image-scaffold | optional/manual | Build `Dockerfile.adapters` or `docker buildx bake adapter-scaffold` with all real adapter switches off |
 | tsan-smoke | optional/manual | configure/build with `-DSR_ENABLE_TSAN=ON`; select focused concurrency tests first |
 | grpc-package | no | Enable after `gRPC::grpc++` and `gRPC::grpc_cpp_plugin` are installed |
 | kafka-integration | no | Enable after RdKafka package and broker service are available |
@@ -69,5 +70,7 @@ Current jobs:
 
 Run the manual scaffold from GitHub Actions with `workflow_dispatch` and `run_dependency_scaffold=true`. This job does not set `SR_ENABLE_REAL_KAFKA`, `SR_ENABLE_REAL_REDIS`, `SR_ENABLE_REAL_POSTGIS`, or `SR_ENABLE_REAL_H3`; it proves service provisioning only. Package-backed adapter jobs remain separate until the corresponding CMake packages are available.
 
+Future adapter CI jobs should build from `Dockerfile.adapters` or `docker-bake.hcl` targets. Keep `adapter-scaffold` package-free and fallback-safe. Add package-backed targets only when the CI job also installs/provides the matching CMake package targets and runs feature-grouped integration tests.
+
 ## Current Boundary
-Batch 52 adds a manual dependency service scaffold to the hosted GitHub Actions workflow. Default push and pull request CI remains dependency-free fallback, protobuf, and focused ASan+UBSan. Real dependency-backed adapter jobs remain pending until package installation and integration tests are added.
+Batch 53 adds adapter image scaffolding outside the default CI path. Default push and pull request CI remains dependency-free fallback, protobuf, and focused ASan+UBSan. Real dependency-backed adapter jobs remain pending until package installation and integration tests are added.
