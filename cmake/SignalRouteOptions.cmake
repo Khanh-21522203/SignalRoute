@@ -13,6 +13,9 @@ option(SR_ENABLE_REAL_POSTGIS "Use libpq/PostGIS adapter instead of the in-memor
 option(SR_ENABLE_REAL_KAFKA "Use librdkafka adapter instead of the in-memory fallback" OFF)
 option(SR_ENABLE_PROMETHEUS "Use prometheus-cpp for metrics export" OFF)
 option(SR_ENABLE_TOMLPLUSPLUS "Use toml++ for config parsing" OFF)
+option(SR_ENABLE_ASAN "Build with AddressSanitizer instrumentation" OFF)
+option(SR_ENABLE_UBSAN "Build with UndefinedBehaviorSanitizer instrumentation" OFF)
+option(SR_ENABLE_TSAN "Build with ThreadSanitizer instrumentation" OFF)
 
 set(SR_DEPENDENCY_PROVIDER "system" CACHE STRING "Dependency provider for production adapters: system, vcpkg, conan, or fetchcontent")
 set_property(CACHE SR_DEPENDENCY_PROVIDER PROPERTY STRINGS system vcpkg conan fetchcontent)
@@ -24,4 +27,8 @@ endif()
 
 if(SR_ENABLE_GRPC AND NOT SR_ENABLE_PROTOBUF)
     message(FATAL_ERROR "SR_ENABLE_GRPC requires SR_ENABLE_PROTOBUF=ON")
+endif()
+
+if(SR_ENABLE_TSAN AND (SR_ENABLE_ASAN OR SR_ENABLE_UBSAN))
+    message(FATAL_ERROR "SR_ENABLE_TSAN must be used alone; do not combine it with ASan or UBSan")
 endif()

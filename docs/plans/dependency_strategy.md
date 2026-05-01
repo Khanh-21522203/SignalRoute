@@ -1,7 +1,7 @@
 # SignalRoute Dependency Strategy
 
 ## Purpose
-Batch 17 established the build contract for production dependencies without replacing the fallback runtime. Batch 18 added domain-to-wire conversion contracts. Batch 19 adds protobuf-only generated builds and keeps gRPC stubs optional because local gRPC packages may not be installed. Batch 46 keeps that contract while improving runtime shutdown observability and endpoint-aware admin socket startup diagnostics.
+Batch 17 established the build contract for production dependencies without replacing the fallback runtime. Batch 18 added domain-to-wire conversion contracts. Batch 19 adds protobuf-only generated builds and keeps gRPC stubs optional because local gRPC packages may not be installed. Batch 47 keeps that contract while adding dependency-free local CI and sanitizer build profiles.
 
 ## Default Build Mode
 The default build is fallback mode:
@@ -39,6 +39,9 @@ The provider value does not install dependencies by itself. It records the inten
 | `SR_ENABLE_REAL_KAFKA` | `OFF` | `RdKafka::rdkafka++` or `rdkafka++` | Durable publish/consume, offsets, lag, DLQ transport |
 | `SR_ENABLE_PROMETHEUS` | `OFF` | `prometheus-cpp::core` | Prometheus exporter |
 | `SR_ENABLE_TOMLPLUSPLUS` | `OFF` | `tomlplusplus::tomlplusplus` | Production TOML parser |
+| `SR_ENABLE_ASAN` | `OFF` | GCC/Clang sanitizer runtime | AddressSanitizer local/CI profile |
+| `SR_ENABLE_UBSAN` | `OFF` | GCC/Clang sanitizer runtime | UndefinedBehaviorSanitizer local/CI profile |
+| `SR_ENABLE_TSAN` | `OFF` | GCC/Clang sanitizer runtime | ThreadSanitizer local/CI profile; mutually exclusive with ASan/UBSan |
 
 ## CMake Contract
 - `cmake/SignalRouteOptions.cmake` owns all build switches.
@@ -57,6 +60,7 @@ The provider value does not install dependencies by itself. It records the inten
 - Real Redis adapter code is hidden behind the existing wrapper API and pimpl storage; public headers do not expose redis-plus-plus types.
 - Real PostGIS adapter code is hidden behind the existing wrapper API and pimpl storage; public headers do not expose libpq types.
 - `.proto` files use package `signalroute.v1`, producing generated C++ types under `signalroute::v1`. This intentionally avoids name collisions with domain types such as `signalroute::LocationEvent`.
+- `cmake/SignalRouteSanitizers.cmake` owns sanitizer compile/link options. Sanitizer switches do not enable external dependencies.
 
 ## Adapter Rule
 Do not remove fallback behavior when enabling a real dependency. Each production adapter must:
@@ -90,6 +94,8 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | Production dependency missing | `cmake -S . -B /tmp/signalroute-h3 -DSR_ENABLE_REAL_H3=ON` | Configure fails at package discovery with a clear missing package error |
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
 | Readiness-critical adapter missing | Set `observability.require_redis_readiness = true` in fallback build | `/health` remains liveness `200`; `/ready` reports `503` with a required `redis` component from the dependency health registry |
+| Local CI script | `scripts/verify-local.sh` | Runs fallback and protobuf configure/build/CTest without dependency installation |
+| ASan+UBSan smoke | `cmake -S . -B /tmp/signalroute-asan-ubsan-build -DSR_BUILD_TESTS=ON -DSR_ENABLE_ASAN=ON -DSR_ENABLE_UBSAN=ON` | Configures/builds with sanitizer instrumentation; in traced sandboxes run tests with `ASAN_OPTIONS=detect_leaks=0` |
 
 ## Current Boundary
-Batch 46 keeps the default admin socket disabled and dependency-free while adding endpoint details to socket startup failures and stop-reason tracking to runtime shutdown. Local fallback and protobuf builds pass, including loopback socket tests for health, readiness failure, oversized request rejection, request timeout, access-log event formatting, bind failure diagnostics, and startup cleanup after socket startup failure. The gRPC configure check still fails clearly at `find_package(gRPC)` because local gRPC CMake packages are not installed, so package-backed adapter compile verification remains pending. gRPC service stubs and adapters remain gated by `SR_ENABLE_GRPC`.
+Batch 47 adds `scripts/verify-local.sh`, sanitizer switches for ASan/UBSan/TSan, and `docs/plans/ci_and_sanitizers.md`. Local fallback and protobuf builds pass through the script. ASan+UBSan configures/builds and focused sanitizer smoke tests pass with LeakSanitizer disabled because this execution environment runs under tracing. The gRPC configure check still fails clearly at `find_package(gRPC)` because local gRPC CMake packages are not installed, so package-backed adapter compile verification remains pending. gRPC service stubs and adapters remain gated by `SR_ENABLE_GRPC`.
