@@ -1,0 +1,73 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fallback-unit:
+    name: fallback unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B /tmp/signalroute-build -DSR_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build /tmp/signalroute-build -j2
+
+      - name: Test
+        run: ctest --test-dir /tmp/signalroute-build --output-on-failure
+
+  protobuf-unit:
+    name: protobuf unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install protobuf packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libprotobuf-dev protobuf-compiler
+
+      - name: Configure
+        run: cmake -S . -B /tmp/signalroute-protobuf-build -DSR_BUILD_TESTS=ON -DSR_ENABLE_PROTOBUF=ON
+
+      - name: Build
+        run: cmake --build /tmp/signalroute-protobuf-build -j2
+
+      - name: Test
+        run: ctest --test-dir /tmp/signalroute-protobuf-build --output-on-failure
+
+  asan-ubsan:
+    name: asan ubsan smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      ASAN_OPTIONS: detect_leaks=0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B /tmp/signalroute-asan-ubsan-build -DSR_BUILD_TESTS=ON -DSR_ENABLE_ASAN=ON -DSR_ENABLE_UBSAN=ON
+
+      - name: Build focused targets
+        run: |
+          cmake --build /tmp/signalroute-asan-ubsan-build --target test_admin_http_handler -j2
+          cmake --build /tmp/signalroute-asan-ubsan-build --target test_config_loader -j2
+          cmake --build /tmp/signalroute-asan-ubsan-build --target test_runtime_application -j2
+
+      - name: Run focused sanitizer smoke
+        run: ctest --test-dir /tmp/signalroute-asan-ubsan-build -R 'test_admin_http_handler|test_config_loader|test_runtime_application' --output-on-failure

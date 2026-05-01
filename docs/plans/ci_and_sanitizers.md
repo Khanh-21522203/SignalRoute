@@ -47,9 +47,9 @@ ThreadSanitizer is intentionally mutually exclusive with ASan/UBSan in `cmake/Si
 
 | Job | Enabled now | Commands |
 |---|---:|---|
-| fallback-unit | yes | `scripts/verify-local.sh` fallback section |
-| protobuf-unit | yes | `scripts/verify-local.sh` protobuf section |
-| asan-ubsan | yes, when runner supports sanitizers | `SIGNALROUTE_RUN_SANITIZERS=1 SIGNALROUTE_ASAN_DETECT_LEAKS=1 scripts/verify-local.sh` |
+| fallback-unit | yes | `.github/workflows/ci.yml` runs fallback configure/build/CTest |
+| protobuf-unit | yes | `.github/workflows/ci.yml` installs only protobuf packages, then runs protobuf configure/build/CTest |
+| asan-ubsan | yes | `.github/workflows/ci.yml` runs focused sanitizer smoke with `ASAN_OPTIONS=detect_leaks=0` |
 | tsan-smoke | optional/manual | configure/build with `-DSR_ENABLE_TSAN=ON`; select focused concurrency tests first |
 | grpc-package | no | Enable after `gRPC::grpc++` and `gRPC::grpc_cpp_plugin` are installed |
 | kafka-integration | no | Enable after RdKafka package and broker service are available |
@@ -57,5 +57,15 @@ ThreadSanitizer is intentionally mutually exclusive with ASan/UBSan in `cmake/Si
 | postgis-integration | no | Enable after libpq/PostGIS packages and database service are available |
 | h3-integration | no | Enable after H3 package is available |
 
+## Hosted Workflow
+The hosted workflow lives at `.github/workflows/ci.yml` and runs on push, pull request, and manual dispatch.
+
+Current jobs:
+- `fallback-unit`: dependency-free fallback configure/build/CTest.
+- `protobuf-unit`: installs `libprotobuf-dev` and `protobuf-compiler`, then runs protobuf configure/build/CTest.
+- `asan-ubsan`: dependency-free focused sanitizer smoke over admin HTTP, config, and runtime application tests.
+
+Dependency-backed jobs for gRPC, Kafka, Redis, PostGIS, and H3 remain intentionally absent until package/service provisioning is ready.
+
 ## Current Boundary
-Batch 47 adds the sanitizer CMake switches and local verification script. No external dependency installation is required. The dependency-backed jobs remain documented placeholders until their packages and service containers are available.
+Batch 48 adds the hosted GitHub Actions workflow for fallback, protobuf, and focused ASan+UBSan smoke. Dependency-backed jobs remain documented placeholders until their packages and service containers are available.

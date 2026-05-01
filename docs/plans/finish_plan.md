@@ -28,7 +28,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Dependency-free runtime application composition root that owns role-specific services, validates post-load runtime config, registers process-level admin lifecycle probes, reports startup failures through admin health, aggregates health/readiness, and centralizes graceful stop order.
 - Dependency-free structured logfmt event formatter used by process startup, shutdown, unhealthy, signal, and fatal paths.
 - Fallback-first dependency build switches in `cmake/SignalRouteOptions.cmake` and central discovery/linking in `cmake/SignalRouteDependencies.cmake`.
-- Dependency-free local CI verification script and CMake sanitizer profiles for ASan, UBSan, and TSan.
+- Dependency-free local CI verification script, hosted fallback/protobuf/sanitizer CI workflow, and CMake sanitizer profiles for ASan, UBSan, and TSan.
 - Stable `signalroute_proto` target that is an interface target in fallback mode, a generated protobuf message library when `SR_ENABLE_PROTOBUF=ON`, and a generated gRPC stub library when `SR_ENABLE_GRPC=ON`.
 - Gated `sr_grpc_transport` adapter target for admin, gateway ingest, and query services; it only compiles when `SR_ENABLE_GRPC=ON`.
 - Dependency-free domain-to-wire conversion contracts under `src/common/proto/` for location, query device state, geofence events, and matching request/result payloads.
@@ -313,7 +313,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task O1: Packaging And CI
 - **Ownership:** Docker/CI/build docs.
-- **Status:** Local fallback/protobuf verification script and sanitizer CMake profiles added; hosted CI workflow, Docker, and dependency-backed jobs pending.
+- **Status:** Local fallback/protobuf verification script, hosted fallback/protobuf/sanitizer CI workflow, and sanitizer CMake profiles added; Docker and dependency-backed jobs pending.
 - **Goal:** Make the project reproducible.
 - **Items:** Docker Compose, production Dockerfile, CI build/test/integration jobs, sanitizer profile.
 - **Depends on:** C2 and enough integration tests to run in CI.
@@ -785,7 +785,7 @@ Make the project reproducible for development, CI, and production deployment.
   - unit tests
   - integration tests with services
   - static analysis if available
-  - Status: local CI-equivalent script runs fallback and protobuf configure/build/CTest without installing dependencies; dependency-backed jobs remain documented placeholders.
+  - Status: hosted workflow runs fallback, protobuf, and focused ASan+UBSan smoke jobs. Local CI-equivalent script runs fallback and protobuf configure/build/CTest without installing dependencies. Dependency-backed jobs remain documented placeholders.
 - Add sanitizers profile for local/CI runs.
   - Status: CMake switches added for ASan, UBSan, and TSan. ASan+UBSan is the default sanitizer profile; TSan is intentionally separate.
 - Add benchmark/load test entrypoints.
