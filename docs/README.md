@@ -167,7 +167,7 @@ Implementation is tracked by feature and subsystem, not by test phases. See [pla
 | Query | Latest, nearby, trip, downsampling, and spatial trip handlers over fallback stores | gRPC/HTTP API layer and real Redis/PostGIS adapters |
 | Geofence | Registry, enter/exit, old-cell exit checks, dwell checker, audit fallback, event publication | Real H3/PostGIS loading, Kafka geofence serialization, admin CRUD |
 | Matching | Strategy registry, nearest strategy, reservation manager, service lifecycle, request handling | Kafka/protobuf request/result loop and production reservation adapter |
-| Workers and ops | H3 cleanup, DLQ replay, metrics reporter fallback flows | Prometheus endpoint, health/admin service, CI, packaging, load tests |
+| Workers and ops | H3 cleanup, DLQ replay, metrics reporter fallback flows, runtime-owned `/metrics` exporter | prometheus-cpp registry integration, CI dependency jobs, load tests |
 
 ---
 

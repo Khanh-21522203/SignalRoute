@@ -62,6 +62,10 @@ add_executable(test_admin_socket_server unit/test_admin_socket_server.cpp)
 target_link_libraries(test_admin_socket_server PRIVATE sr_runtime)
 add_test(NAME test_admin_socket_server COMMAND test_admin_socket_server)
 
+add_executable(test_metrics_exporter unit/test_metrics_exporter.cpp)
+target_link_libraries(test_metrics_exporter PRIVATE sr_runtime)
+add_test(NAME test_metrics_exporter COMMAND test_metrics_exporter)
+
 add_executable(test_structured_log unit/test_structured_log.cpp)
 target_link_libraries(test_structured_log PRIVATE sr_common)
 add_test(NAME test_structured_log COMMAND test_structured_log)

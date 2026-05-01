@@ -2,6 +2,7 @@
 
 #include "admin_request_loop.h"
 #include "admin_socket_server.h"
+#include "metrics_exporter.h"
 
 #include <exception>
 #include <iostream>
@@ -56,6 +57,7 @@ void RuntimeApplication::start(const Config& config) {
     admin_ = std::make_unique<AdminService>(config_.server.role.empty() ? "invalid" : config_.server.role);
     configure_admin_http();
     configure_admin_socket();
+    configure_metrics_exporter();
     startup_failed_ = false;
     last_start_error_.clear();
     last_stop_reason_ = "not_stopped";
@@ -83,6 +85,7 @@ void RuntimeApplication::start(const Config& config) {
 
         register_admin_probes();
         start_admin_socket();
+        start_metrics_exporter();
         running_ = true;
     } catch (const std::exception& ex) {
         stop_started_services();
@@ -121,6 +124,9 @@ void RuntimeApplication::stop(std::string reason) {
 }
 
 void RuntimeApplication::stop_started_services() {
+    if (metrics_exporter_) {
+        metrics_exporter_->stop();
+    }
     if (admin_socket_) {
         admin_socket_->stop();
     }
@@ -242,6 +248,22 @@ ServiceHealthSnapshot RuntimeApplication::admin_socket_health_snapshot() const {
     return admin_socket_ ? admin_socket_->health_snapshot() : stopped_health("admin socket disabled");
 }
 
+bool RuntimeApplication::metrics_exporter_enabled() const {
+    return config_.observability.metrics_exporter_enabled;
+}
+
+bool RuntimeApplication::metrics_exporter_running() const {
+    return metrics_exporter_ && metrics_exporter_->is_running();
+}
+
+uint16_t RuntimeApplication::metrics_exporter_bound_port() const {
+    return metrics_exporter_ ? metrics_exporter_->bound_port() : 0;
+}
+
+ServiceHealthSnapshot RuntimeApplication::metrics_exporter_health_snapshot() const {
+    return metrics_exporter_ ? metrics_exporter_->health_snapshot() : stopped_health("metrics exporter disabled");
+}
+
 void RuntimeApplication::configure_admin_http() {
     admin_endpoint_ = std::make_unique<AdminEndpointHandler>(*admin_);
     admin_http_ = std::make_unique<AdminHttpHandler>(*admin_endpoint_, routes_from_config(config_));
@@ -263,6 +285,14 @@ void RuntimeApplication::configure_admin_socket() {
     admin_socket_ = std::make_unique<AdminSocketServer>(*admin_request_loop_, std::move(sink));
 }
 
+void RuntimeApplication::configure_metrics_exporter() {
+    metrics_exporter_.reset();
+    if (!config_.observability.metrics_exporter_enabled) {
+        return;
+    }
+    metrics_exporter_ = std::make_unique<MetricsExporter>();
+}
+
 void RuntimeApplication::start_admin_socket() {
     if (!admin_socket_) {
         return;
@@ -270,6 +300,20 @@ void RuntimeApplication::start_admin_socket() {
     admin_socket_->start(AdminSocketEndpoint{
         config_.observability.admin_socket_addr,
         static_cast<uint16_t>(config_.observability.admin_socket_port),
+        config_.observability.admin_socket_backlog,
+        config_.observability.admin_request_timeout_ms,
+        static_cast<std::size_t>(config_.observability.admin_max_request_bytes),
+    });
+}
+
+void RuntimeApplication::start_metrics_exporter() {
+    if (!metrics_exporter_) {
+        return;
+    }
+    metrics_exporter_->start(MetricsExporterEndpoint{
+        config_.observability.metrics_addr,
+        static_cast<uint16_t>(config_.observability.metrics_port),
+        config_.observability.metrics_path,
         config_.observability.admin_socket_backlog,
         config_.observability.admin_request_timeout_ms,
         static_cast<std::size_t>(config_.observability.admin_max_request_bytes),
@@ -307,6 +351,12 @@ void RuntimeApplication::register_admin_probes() {
     }
     if (admin_socket_) {
         admin_->register_lifecycle_probe("admin_socket", [this] { return admin_socket_->health_snapshot(); }, false);
+    }
+    if (metrics_exporter_) {
+        admin_->register_lifecycle_probe(
+            "metrics_exporter",
+            [this] { return metrics_exporter_->health_snapshot(); },
+            false);
     }
     register_dependency_readiness_probes();
     admin_->register_dependency_probe("event_bus", [] { return true; }, false);

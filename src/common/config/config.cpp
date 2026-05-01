@@ -356,7 +356,7 @@ void validate_config(const Config& config) {
     require_positive(config.threads.blocking_pool_size, "threads.blocking_pool_size");
 
     require_non_empty(config.observability.metrics_addr, "observability.metrics_addr");
-    require_port(config.observability.metrics_port, "observability.metrics_port");
+    require_port_or_zero(config.observability.metrics_port, "observability.metrics_port");
     require_path(config.observability.metrics_path, "observability.metrics_path");
     require_non_empty(config.observability.admin_socket_addr, "observability.admin_socket_addr");
     require_port_or_zero(config.observability.admin_socket_port, "observability.admin_socket_port");
@@ -484,6 +484,12 @@ Config Config::load(const std::string& path) {
         get_int(sections, "observability", "metrics_port", config.observability.metrics_port, path);
     config.observability.metrics_path =
         get_string(sections, "observability", "metrics_path", config.observability.metrics_path, path);
+    config.observability.metrics_exporter_enabled =
+        get_bool(sections,
+                 "observability",
+                 "metrics_exporter_enabled",
+                 config.observability.metrics_exporter_enabled,
+                 path);
     config.observability.log_level =
         get_string(sections, "observability", "log_level", config.observability.log_level, path);
     config.observability.admin_http_enabled =

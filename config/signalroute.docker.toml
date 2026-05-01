@@ -81,6 +81,7 @@ blocking_pool_size = 16
 metrics_addr = "0.0.0.0"
 metrics_port = 9100
 metrics_path = "/metrics"
+metrics_exporter_enabled = true
 admin_http_enabled = true
 admin_socket_enabled = false
 admin_socket_addr = "127.0.0.1"

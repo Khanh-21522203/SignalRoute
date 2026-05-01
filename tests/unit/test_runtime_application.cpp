@@ -133,6 +133,10 @@ void test_runtime_admin_socket_disabled_by_default() {
     assert(!app.admin_socket_running());
     assert(app.admin_socket_bound_port() == 0);
     assert(app.admin_socket_health_snapshot().state == signalroute::ServiceLifecycleState::Stopped);
+    assert(!app.metrics_exporter_enabled());
+    assert(!app.metrics_exporter_running());
+    assert(app.metrics_exporter_bound_port() == 0);
+    assert(app.metrics_exporter_health_snapshot().state == signalroute::ServiceLifecycleState::Stopped);
 
     app.stop();
 }

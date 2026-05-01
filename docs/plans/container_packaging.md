@@ -47,7 +47,7 @@ Exposed ports:
 |---:|---|---|
 | `9090` | gRPC service port | Real server binding pending |
 | `9091` | UDP ingest port | Real endpoint pending |
-| `9100` | Metrics/admin HTTP-style port | Runtime handler exists; real HTTP server binding pending |
+| `9100` | Metrics scrape port | Runtime-owned fallback Prometheus text exporter when `metrics_exporter_enabled = true` |
 | `9101` | Admin socket | Optional, disabled by default in config |
 
 ## Security Defaults

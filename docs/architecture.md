@@ -692,7 +692,7 @@ All configuration is provided via a TOML file.
 | `[geofence]` | `eval_enabled`, `dwell_threshold_s`, `max_fences`, `reload_interval_s` |
 | `[gateway]` | `max_batch_size`, `max_batch_events`, `rate_limit_rps_per_device`, `timestamp_skew_tolerance_s` |
 | `[threads]` | `io_threads`, `processor_threads`, `geofence_eval_threads`, `blocking_pool_size` |
-| `[observability]` | `metrics_addr`, `metrics_path`, `log_level` |
+| `[observability]` | `metrics_addr`, `metrics_port`, `metrics_path`, `metrics_exporter_enabled`, admin socket/readiness keys, `log_level` |
 
 ---
 

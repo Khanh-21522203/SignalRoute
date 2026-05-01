@@ -113,6 +113,7 @@ struct ObservabilityConfig {
     std::string metrics_addr = "0.0.0.0";
     int         metrics_port = 9100;
     std::string metrics_path = "/metrics";
+    bool        metrics_exporter_enabled = false;
     std::string log_level    = "info";
     bool        admin_http_enabled = true;
     bool        admin_socket_enabled = false;

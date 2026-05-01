@@ -37,7 +37,7 @@ The provider value does not install dependencies by itself. It records the inten
 | `SR_ENABLE_REAL_REDIS` | `OFF` | `hiredis::hiredis`, `redis++::redis++` | Real state, H3 index, fence state, reservations |
 | `SR_ENABLE_REAL_POSTGIS` | `OFF` | `PostgreSQL::PostgreSQL` | Real trip history, spatial queries, geofence repositories |
 | `SR_ENABLE_REAL_KAFKA` | `OFF` | `RdKafka::rdkafka++` or `rdkafka++` | Durable publish/consume, offsets, lag, DLQ transport |
-| `SR_ENABLE_PROMETHEUS` | `OFF` | `prometheus-cpp::core` | Prometheus exporter |
+| `SR_ENABLE_PROMETHEUS` | `OFF` | `prometheus-cpp::core` | Native Prometheus registry/exposer integration |
 | `SR_ENABLE_TOMLPLUSPLUS` | `OFF` | `tomlplusplus::tomlplusplus` | Production TOML parser |
 | `SR_ENABLE_ASAN` | `OFF` | GCC/Clang sanitizer runtime | AddressSanitizer local/CI profile |
 | `SR_ENABLE_UBSAN` | `OFF` | GCC/Clang sanitizer runtime | UndefinedBehaviorSanitizer local/CI profile |
@@ -80,7 +80,7 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 5. Install/provide hiredis and redis-plus-plus CMake packages and run real-Redis compile/integration verification for `SR_ENABLE_REAL_REDIS`; the adapter path is present behind `RedisClient`.
 6. Install/provide PostgreSQL/libpq headers and libraries, then run real-PostGIS compile/integration verification for `SR_ENABLE_REAL_POSTGIS`; the adapter path is present behind `PostgresClient`.
 7. Add gRPC gateway/query/admin services on top of existing handlers.
-8. Add Prometheus exporter and health/readiness endpoints.
+8. Replace the fallback metrics text registry with package-backed prometheus-cpp once the package is available.
 
 ## Verification Matrix
 
@@ -93,9 +93,10 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | gRPC missing | `cmake -S . -B /tmp/signalroute-grpc-missing -DSR_ENABLE_PROTOBUF=ON -DSR_ENABLE_GRPC=ON` | Configure fails clearly if gRPC package is unavailable |
 | Production dependency missing | `cmake -S . -B /tmp/signalroute-h3 -DSR_ENABLE_REAL_H3=ON` | Configure fails at package discovery with a clear missing package error |
 | Production dependency present | Same option with package available in CMake path | Configure succeeds and links through `sr_dependencies` |
+| Metrics exporter | Set `observability.metrics_exporter_enabled = true` with `metrics_port = 0` in a test config | Runtime binds an ephemeral scrape socket and serves Prometheus text at `metrics_path` |
 | Readiness-critical adapter missing | Set `observability.require_redis_readiness = true` in fallback build | `/health` remains liveness `200`; `/ready` reports `503` with a required `redis` component from the dependency health registry |
 | Local CI script | `scripts/verify-local.sh` | Runs fallback and protobuf configure/build/CTest without dependency installation |
 | ASan+UBSan smoke | `cmake -S . -B /tmp/signalroute-asan-ubsan-build -DSR_BUILD_TESTS=ON -DSR_ENABLE_ASAN=ON -DSR_ENABLE_UBSAN=ON` | Configures/builds with sanitizer instrumentation; in traced sandboxes run tests with `ASAN_OPTIONS=detect_leaks=0` |
 
 ## Current Boundary
-Batch 50 adds `compose.yml` and `config/signalroute.docker.toml` for local Redis, PostGIS, and Redpanda scaffolding. The SignalRoute Compose service is profile-gated and still runs the fallback runtime unless future production images enable real adapters. The gRPC configure check still fails clearly at `find_package(gRPC)` because local gRPC CMake packages are not installed, so package-backed adapter compile verification remains pending. gRPC service stubs and adapters remain gated by `SR_ENABLE_GRPC`.
+Batch 51 adds a dependency-free runtime-owned metrics scrape socket behind `observability.metrics_exporter_enabled`. It serves the current fallback Prometheus text snapshot at `metrics_path`; `SR_ENABLE_PROMETHEUS` remains reserved for future prometheus-cpp registry/exposer integration. The Docker Compose scaffold still provides local Redis, PostGIS, and Redpanda services while the SignalRoute service remains fallback-runtime unless future production images enable real adapters. The gRPC configure check still fails clearly at `find_package(gRPC)` because local gRPC CMake packages are not installed, so package-backed adapter compile verification remains pending. gRPC service stubs and adapters remain gated by `SR_ENABLE_GRPC`.

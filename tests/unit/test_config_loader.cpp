@@ -56,6 +56,7 @@ void test_loads_canonical_config() {
     assert(config.gateway.api_key.empty());
     assert(config.gateway.max_in_flight_requests == 0);
     assert(config.matching.request_topic == "sr.match.requests");
+    assert(!config.observability.metrics_exporter_enabled);
     assert(config.observability.admin_http_enabled);
     assert(!config.observability.admin_socket_enabled);
     assert(config.observability.admin_socket_addr == "127.0.0.1");
@@ -101,6 +102,7 @@ max_in_flight_requests = 8
 
 [observability]
 metrics_path = "/custom-metrics"
+metrics_exporter_enabled = true
 admin_http_enabled = false
 admin_socket_enabled = true
 admin_socket_addr = "127.0.0.1"
@@ -132,6 +134,7 @@ require_h3_readiness = true
     assert(config.gateway.api_key == "secret");
     assert(config.gateway.max_in_flight_requests == 8);
     assert(config.observability.metrics_path == "/custom-metrics");
+    assert(config.observability.metrics_exporter_enabled);
     assert(!config.observability.admin_http_enabled);
     assert(config.observability.admin_socket_enabled);
     assert(config.observability.admin_socket_addr == "127.0.0.1");

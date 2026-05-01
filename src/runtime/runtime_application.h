@@ -22,6 +22,7 @@ namespace signalroute {
 
 class AdminRequestLoop;
 class AdminSocketServer;
+class MetricsExporter;
 
 struct RuntimeRoleSelection {
     bool gateway = false;
@@ -63,11 +64,17 @@ public:
     [[nodiscard]] bool admin_socket_running() const;
     [[nodiscard]] uint16_t admin_socket_bound_port() const;
     [[nodiscard]] ServiceHealthSnapshot admin_socket_health_snapshot() const;
+    [[nodiscard]] bool metrics_exporter_enabled() const;
+    [[nodiscard]] bool metrics_exporter_running() const;
+    [[nodiscard]] uint16_t metrics_exporter_bound_port() const;
+    [[nodiscard]] ServiceHealthSnapshot metrics_exporter_health_snapshot() const;
 
 private:
     void configure_admin_http();
     void configure_admin_socket();
+    void configure_metrics_exporter();
     void start_admin_socket();
+    void start_metrics_exporter();
     void stop_started_services();
     void register_runtime_probe();
     void register_admin_probes();
@@ -86,6 +93,7 @@ private:
     std::unique_ptr<AdminHttpHandler> admin_http_;
     std::unique_ptr<AdminRequestLoop> admin_request_loop_;
     std::unique_ptr<AdminSocketServer> admin_socket_;
+    std::unique_ptr<MetricsExporter> metrics_exporter_;
     DependencyHealthRegistry dependency_health_;
     GatewayService gateway_;
     ProcessorService processor_;
