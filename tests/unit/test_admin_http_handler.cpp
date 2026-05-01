@@ -129,6 +129,11 @@ void test_serialize_http_response_writes_status_headers_and_body() {
     assert(wire.rfind("\r\n\r\nok") == wire.size() - 6);
 }
 
+void test_reason_phrases_include_socket_hardening_statuses() {
+    assert(signalroute::reason_phrase_for_status(408) == "Request Timeout");
+    assert(signalroute::reason_phrase_for_status(413) == "Payload Too Large");
+}
+
 int main() {
     std::cout << "test_admin_http_handler:\n";
     test_health_route_returns_json_200();
@@ -138,6 +143,7 @@ int main() {
     test_unknown_path_returns_404();
     test_unsupported_method_returns_405_with_allow_header();
     test_serialize_http_response_writes_status_headers_and_body();
+    test_reason_phrases_include_socket_hardening_statuses();
     std::cout << "All admin HTTP handler tests passed.\n";
     return 0;
 }

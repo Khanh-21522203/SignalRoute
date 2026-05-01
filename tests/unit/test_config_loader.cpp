@@ -61,6 +61,9 @@ void test_loads_canonical_config() {
     assert(config.observability.admin_socket_addr == "127.0.0.1");
     assert(config.observability.admin_socket_port == 9101);
     assert(config.observability.admin_socket_backlog == 16);
+    assert(config.observability.admin_request_timeout_ms == 1000);
+    assert(config.observability.admin_max_request_bytes == 8192);
+    assert(!config.observability.admin_access_log_enabled);
     assert(config.observability.health_path == "/health");
     assert(config.observability.readiness_path == "/ready");
     assert(!config.observability.require_kafka_readiness);
@@ -103,6 +106,9 @@ admin_socket_enabled = true
 admin_socket_addr = "127.0.0.1"
 admin_socket_port = 0
 admin_socket_backlog = 4
+admin_request_timeout_ms = 250
+admin_max_request_bytes = 4096
+admin_access_log_enabled = true
 health_path = "/live"
 readiness_path = "/ready-custom"
 require_kafka_readiness = true
@@ -131,6 +137,9 @@ require_h3_readiness = true
     assert(config.observability.admin_socket_addr == "127.0.0.1");
     assert(config.observability.admin_socket_port == 0);
     assert(config.observability.admin_socket_backlog == 4);
+    assert(config.observability.admin_request_timeout_ms == 250);
+    assert(config.observability.admin_max_request_bytes == 4096);
+    assert(config.observability.admin_access_log_enabled);
     assert(config.observability.health_path == "/live");
     assert(config.observability.readiness_path == "/ready-custom");
     assert(config.observability.require_kafka_readiness);
@@ -222,6 +231,17 @@ admin_socket_port = -1
     });
 }
 
+void test_invalid_admin_hardening_config_is_rejected() {
+    const auto path = write_config("signalroute_config_invalid_admin_hardening.toml", minimal_valid_config() + R"toml(
+[observability]
+admin_max_request_bytes = 0
+)toml");
+
+    expect_throws([&] {
+        (void)signalroute::Config::load(path.string());
+    });
+}
+
 void test_post_load_override_validation_uses_same_rules() {
     const auto path = write_config("signalroute_config_post_load_override.toml", minimal_valid_config());
     auto config = signalroute::Config::load(path.string());
@@ -244,6 +264,7 @@ int main() {
     test_negative_in_flight_limit_is_rejected();
     test_observability_paths_must_start_with_slash();
     test_invalid_admin_socket_config_is_rejected();
+    test_invalid_admin_hardening_config_is_rejected();
     test_post_load_override_validation_uses_same_rules();
     std::cout << "All config loader tests passed.\n";
     return 0;

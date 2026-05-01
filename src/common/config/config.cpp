@@ -361,6 +361,8 @@ void validate_config(const Config& config) {
     require_non_empty(config.observability.admin_socket_addr, "observability.admin_socket_addr");
     require_port_or_zero(config.observability.admin_socket_port, "observability.admin_socket_port");
     require_positive(config.observability.admin_socket_backlog, "observability.admin_socket_backlog");
+    require_positive(config.observability.admin_request_timeout_ms, "observability.admin_request_timeout_ms");
+    require_positive(config.observability.admin_max_request_bytes, "observability.admin_max_request_bytes");
     require_path(config.observability.health_path, "observability.health_path");
     require_path(config.observability.readiness_path, "observability.readiness_path");
     const std::set<std::string> log_levels = {"trace", "debug", "info", "warn", "error"};
@@ -510,6 +512,24 @@ Config Config::load(const std::string& path) {
                 "admin_socket_backlog",
                 config.observability.admin_socket_backlog,
                 path);
+    config.observability.admin_request_timeout_ms =
+        get_int(sections,
+                "observability",
+                "admin_request_timeout_ms",
+                config.observability.admin_request_timeout_ms,
+                path);
+    config.observability.admin_max_request_bytes =
+        get_int(sections,
+                "observability",
+                "admin_max_request_bytes",
+                config.observability.admin_max_request_bytes,
+                path);
+    config.observability.admin_access_log_enabled =
+        get_bool(sections,
+                 "observability",
+                 "admin_access_log_enabled",
+                 config.observability.admin_access_log_enabled,
+                 path);
     config.observability.health_path =
         get_string(sections, "observability", "health_path", config.observability.health_path, path);
     config.observability.readiness_path =

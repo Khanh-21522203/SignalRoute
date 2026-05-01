@@ -4,6 +4,7 @@
 #include "admin_socket_server.h"
 
 #include <exception>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -240,7 +241,13 @@ void RuntimeApplication::configure_admin_socket() {
         return;
     }
     admin_request_loop_ = std::make_unique<AdminRequestLoop>(*this);
-    admin_socket_ = std::make_unique<AdminSocketServer>(*admin_request_loop_);
+    AdminSocketAccessLogSink sink;
+    if (config_.observability.admin_access_log_enabled) {
+        sink = [](const AdminSocketAccessLogEntry& entry) {
+            write_logfmt(std::cout, make_admin_socket_access_log_event(entry));
+        };
+    }
+    admin_socket_ = std::make_unique<AdminSocketServer>(*admin_request_loop_, std::move(sink));
 }
 
 void RuntimeApplication::start_admin_socket() {
@@ -251,6 +258,8 @@ void RuntimeApplication::start_admin_socket() {
         config_.observability.admin_socket_addr,
         static_cast<uint16_t>(config_.observability.admin_socket_port),
         config_.observability.admin_socket_backlog,
+        config_.observability.admin_request_timeout_ms,
+        static_cast<std::size_t>(config_.observability.admin_max_request_bytes),
     });
 }
 

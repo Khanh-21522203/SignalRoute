@@ -119,6 +119,9 @@ struct ObservabilityConfig {
     std::string admin_socket_addr = "127.0.0.1";
     int         admin_socket_port = 9101;
     int         admin_socket_backlog = 16;
+    int         admin_request_timeout_ms = 1000;
+    int         admin_max_request_bytes = 8192;
+    bool        admin_access_log_enabled = false;
     std::string health_path = "/health";
     std::string readiness_path = "/ready";
     bool        require_kafka_readiness = false;

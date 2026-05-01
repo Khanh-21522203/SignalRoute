@@ -143,6 +143,8 @@ void test_runtime_admin_socket_can_start_from_config_when_sockets_allowed() {
     config.observability.admin_socket_addr = "127.0.0.1";
     config.observability.admin_socket_port = 0;
     config.observability.admin_socket_backlog = 4;
+    config.observability.admin_request_timeout_ms = 250;
+    config.observability.admin_max_request_bytes = 4096;
 
     signalroute::RuntimeApplication app;
     try {

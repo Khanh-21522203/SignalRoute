@@ -91,7 +91,9 @@ std::string reason_phrase_for_status(int status_code) {
     switch (status_code) {
         case 200: return "OK";
         case 404: return "Not Found";
+        case 408: return "Request Timeout";
         case 405: return "Method Not Allowed";
+        case 413: return "Payload Too Large";
         case 503: return "Service Unavailable";
         default: return "Unknown";
     }
