@@ -40,6 +40,7 @@ target "adapter-protobuf" {
   tags = ["signalroute:adapter-protobuf"]
   args = {
     SR_ADAPTER_APT_PACKAGES = "libprotobuf-dev protobuf-compiler"
+    SR_ADAPTER_RUNTIME_APT_PACKAGES = "libprotobuf32t64"
     SR_ENABLE_PROTOBUF = "ON"
   }
 }

@@ -16,6 +16,11 @@ on:
         required: false
         type: boolean
         default: false
+      run_adapter_protobuf_image:
+        description: Build and smoke-test the protobuf-enabled adapter image
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -195,6 +200,37 @@ jobs:
         run: |
           set +e
           timeout 3s docker run --rm signalroute:adapter-scaffold \
+            --config=/etc/signalroute/signalroute.toml \
+            --role=query
+          status=$?
+          set -e
+          if [ "${status}" -ne 124 ]; then
+            echo "expected timeout exit 124 after clean SIGTERM, got ${status}"
+            exit 1
+          fi
+
+  adapter-protobuf-image:
+    name: adapter protobuf image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_adapter_protobuf_image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Bake target
+        run: docker buildx bake --print adapter-protobuf
+
+      - name: Build protobuf adapter image
+        run: docker buildx bake adapter-protobuf
+
+      - name: Verify protobuf adapter binary
+        run: docker run --rm --entrypoint /bin/sh signalroute:adapter-protobuf -c 'test -x /usr/local/bin/signalroute && ldd /usr/local/bin/signalroute'
+
+      - name: Smoke protobuf adapter runtime
+        run: |
+          set +e
+          timeout 3s docker run --rm signalroute:adapter-protobuf \
             --config=/etc/signalroute/signalroute.toml \
             --role=query
           status=$?

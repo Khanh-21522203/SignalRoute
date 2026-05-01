@@ -28,7 +28,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Dependency-free runtime application composition root that owns role-specific services, validates post-load runtime config, registers process-level admin lifecycle probes, reports startup failures through admin health, aggregates health/readiness, and centralizes graceful stop order.
 - Dependency-free structured logfmt event formatter used by process startup, shutdown, unhealthy, signal, and fatal paths.
 - Fallback-first dependency build switches in `cmake/SignalRouteOptions.cmake` and central discovery/linking in `cmake/SignalRouteDependencies.cmake`.
-- Dependency-free local CI verification script, hosted fallback/protobuf/sanitizer CI workflow, production fallback Dockerfile, adapter image scaffold, Docker Compose dependency scaffold, container runtime contract, and CMake sanitizer profiles for ASan, UBSan, and TSan.
+- Dependency-free local CI verification script, hosted fallback/protobuf/sanitizer CI workflow, production fallback Dockerfile, adapter image scaffold, protobuf adapter image target, Docker Compose dependency scaffold, container runtime contract, and CMake sanitizer profiles for ASan, UBSan, and TSan.
 - Stable `signalroute_proto` target that is an interface target in fallback mode, a generated protobuf message library when `SR_ENABLE_PROTOBUF=ON`, and a generated gRPC stub library when `SR_ENABLE_GRPC=ON`.
 - Gated `sr_grpc_transport` adapter target for admin, gateway ingest, and query services; it only compiles when `SR_ENABLE_GRPC=ON`.
 - Dependency-free domain-to-wire conversion contracts under `src/common/proto/` for location, query device state, geofence events, and matching request/result payloads.
@@ -313,7 +313,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task O1: Packaging And CI
 - **Ownership:** Docker/CI/build docs.
-- **Status:** Local fallback/protobuf verification script, hosted fallback/protobuf/sanitizer CI workflow, manual dependency service scaffold, manual adapter image scaffold job, production fallback Dockerfile, adapter image scaffold, Docker Compose dependency scaffold, container runtime contract, and sanitizer CMake profiles added; package-backed adapter images and integration jobs pending.
+- **Status:** Local fallback/protobuf verification script, hosted fallback/protobuf/sanitizer CI workflow, manual dependency service scaffold, manual adapter image scaffold job, manual protobuf adapter image job, production fallback Dockerfile, adapter image scaffold, protobuf adapter image target, Docker Compose dependency scaffold, container runtime contract, and sanitizer CMake profiles added; real dependency-backed adapter images and integration jobs pending.
 - **Goal:** Make the project reproducible.
 - **Items:** Docker Compose, production Dockerfile, CI build/test/integration jobs, sanitizer profile.
 - **Depends on:** C2 and enough integration tests to run in CI.
@@ -784,14 +784,14 @@ Make the project reproducible for development, CI, and production deployment.
 - Add production Dockerfile.
   - Status: multi-stage Ubuntu 24.04 Dockerfile builds the fallback runtime with `SR_BUILD_TESTS=OFF` and runs as an unprivileged `signalroute` user.
 - Add adapter image scaffold.
-  - Status: `Dockerfile.adapters` and `docker-bake.hcl` provide a repeatable fallback-safe image path for future package-backed adapter builds. Real adapter switches stay off by default.
+  - Status: `Dockerfile.adapters` and `docker-bake.hcl` provide a repeatable fallback-safe image path and a protobuf-only package-backed image path. Real adapter switches stay off by default.
 - Add CI pipeline:
   - format check
   - build
   - unit tests
   - integration tests with services
   - static analysis if available
-  - Status: hosted workflow runs fallback, protobuf, and focused ASan+UBSan smoke jobs. Local CI-equivalent script runs fallback and protobuf configure/build/CTest without installing dependencies. Manual dependency service scaffold verifies Redis/PostGIS/Redpanda service provisioning, and manual adapter image scaffold verifies the fallback-safe image path; real adapter integration jobs remain pending.
+  - Status: hosted workflow runs fallback, protobuf, and focused ASan+UBSan smoke jobs. Local CI-equivalent script runs fallback and protobuf configure/build/CTest without installing dependencies. Manual dependency service scaffold verifies Redis/PostGIS/Redpanda service provisioning, manual adapter image scaffold verifies the fallback-safe image path, and manual protobuf adapter image CI verifies protobuf package/runtime image wiring; real adapter integration jobs remain pending.
 - Add sanitizers profile for local/CI runs.
   - Status: CMake switches added for ASan, UBSan, and TSan. ASan+UBSan is the default sanitizer profile; TSan is intentionally separate.
 - Add benchmark/load test entrypoints.

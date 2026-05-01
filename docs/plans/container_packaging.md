@@ -34,9 +34,18 @@ Optional package-backed builds must opt in explicitly through build args:
 ```sh
 docker build -f Dockerfile.adapters --target runtime -t signalroute:adapter-protobuf \
   --build-arg SR_ADAPTER_APT_PACKAGES="libprotobuf-dev protobuf-compiler" \
+  --build-arg SR_ADAPTER_RUNTIME_APT_PACKAGES="libprotobuf32t64" \
   --build-arg SR_ENABLE_PROTOBUF=ON \
   .
 ```
+
+The Docker Bake file also exposes this protobuf-only package-backed target:
+
+```sh
+docker buildx bake adapter-protobuf
+```
+
+`adapter-protobuf` installs `libprotobuf-dev` and `protobuf-compiler` in the build stage, installs `libprotobuf32t64` in the runtime stage, and enables only `SR_ENABLE_PROTOBUF=ON`. Kafka, Redis, PostGIS, H3, gRPC, Prometheus, and toml++ switches remain off.
 
 Adapter build args:
 
@@ -150,5 +159,16 @@ That job:
 
 Important boundary: this job verifies the image path only. It does not install adapter packages and does not enable real adapter switches.
 
+## CI Protobuf Adapter Image
+The GitHub Actions workflow includes a manual `adapter-protobuf-image` job. Start it with `workflow_dispatch` and `run_adapter_protobuf_image=true`.
+
+That job:
+- validates the `adapter-protobuf` Docker Bake target;
+- builds `signalroute:adapter-protobuf` from `Dockerfile.adapters`;
+- verifies the packaged binary exists and that runtime shared libraries resolve with `ldd`;
+- runs a short query-role protobuf-enabled runtime smoke and expects timeout exit `124` after clean SIGTERM.
+
+Important boundary: this job proves protobuf package-backed image wiring only. It does not enable real Kafka, Redis, PostGIS, H3, gRPC, Prometheus, or toml++ switches.
+
 ## Current Boundary
-The default image proves reproducible packaging for the fallback runtime, `Dockerfile.adapters` provides a repeatable image path for future package-backed builds, Compose provides local dependency containers, and CI can manually validate dependency service provisioning plus the adapter scaffold image path. Real dependency-backed integration tests remain pending until package installation and adapter-specific integration tests are ready.
+The default image proves reproducible packaging for the fallback runtime, `Dockerfile.adapters` provides a repeatable image path for package-backed builds, Compose provides local dependency containers, and CI can manually validate dependency service provisioning plus fallback-safe and protobuf-enabled adapter image paths. Real dependency-backed integration tests remain pending until package installation and adapter-specific integration tests are ready.
