@@ -43,12 +43,14 @@ public:
 
     void start(const Config& config);
     void stop();
+    void stop(std::string reason);
 
     [[nodiscard]] bool is_running() const;
     [[nodiscard]] bool is_healthy() const;
     [[nodiscard]] bool is_ready() const;
     [[nodiscard]] bool startup_failed() const;
     [[nodiscard]] const std::string& last_start_error() const;
+    [[nodiscard]] const std::string& last_stop_reason() const;
     [[nodiscard]] const RuntimeRoleSelection& roles() const;
     [[nodiscard]] AdminService& admin();
     [[nodiscard]] const AdminService& admin() const;
@@ -75,6 +77,7 @@ private:
     std::atomic<bool> running_{false};
     bool startup_failed_ = false;
     std::string last_start_error_;
+    std::string last_stop_reason_ = "not_started";
     Config config_;
     RuntimeRoleSelection roles_;
     EventBus event_bus_;

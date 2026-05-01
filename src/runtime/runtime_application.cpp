@@ -43,7 +43,7 @@ RuntimeApplication::RuntimeApplication()
 
 RuntimeApplication::~RuntimeApplication() {
     if (running_) {
-        stop();
+        stop("destructor");
     }
 }
 
@@ -58,6 +58,7 @@ void RuntimeApplication::start(const Config& config) {
     configure_admin_socket();
     startup_failed_ = false;
     last_start_error_.clear();
+    last_stop_reason_ = "not_stopped";
     roles_ = RuntimeRoleSelection{};
 
     try {
@@ -103,6 +104,14 @@ void RuntimeApplication::start(const Config& config) {
 }
 
 void RuntimeApplication::stop() {
+    stop("requested");
+}
+
+void RuntimeApplication::stop(std::string reason) {
+    if (reason.empty()) {
+        reason = "requested";
+    }
+    last_stop_reason_ = std::move(reason);
     if (!running_) {
         return;
     }
@@ -168,6 +177,10 @@ bool RuntimeApplication::startup_failed() const {
 
 const std::string& RuntimeApplication::last_start_error() const {
     return last_start_error_;
+}
+
+const std::string& RuntimeApplication::last_stop_reason() const {
+    return last_stop_reason_;
 }
 
 const RuntimeRoleSelection& RuntimeApplication::roles() const {

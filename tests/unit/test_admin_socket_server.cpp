@@ -223,6 +223,42 @@ void test_socket_access_log_event_is_structured_logfmt_ready() {
     assert(line.find("status=200") != std::string::npos);
 }
 
+void test_socket_bind_failure_includes_endpoint_diagnostics() {
+    signalroute::RuntimeApplication runtime;
+    runtime.start(config_for_role("query"));
+    signalroute::AdminRequestLoop first_loop(runtime);
+    signalroute::AdminSocketServer first(first_loop);
+
+    try {
+        first.start({"127.0.0.1", 0, 4});
+    } catch (const std::runtime_error& ex) {
+        const std::string message = ex.what();
+        if (message.find("Operation not permitted") != std::string::npos) {
+            assert(first.health_snapshot().state == signalroute::ServiceLifecycleState::Failed);
+            return;
+        }
+        throw;
+    }
+
+    signalroute::AdminRequestLoop second_loop(runtime);
+    signalroute::AdminSocketServer second(second_loop);
+    bool thrown = false;
+    try {
+        second.start({"127.0.0.1", first.bound_port(), 4});
+    } catch (const std::runtime_error& ex) {
+        thrown = true;
+        const std::string message = ex.what();
+        assert(message.find("admin socket bind failed") != std::string::npos);
+        assert(message.find("listen_addr=127.0.0.1") != std::string::npos);
+        assert(message.find("port=" + std::to_string(first.bound_port())) != std::string::npos);
+        assert(message.find("backlog=4") != std::string::npos);
+    }
+
+    assert(thrown);
+    assert(second.health_snapshot().state == signalroute::ServiceLifecycleState::Failed);
+    first.stop();
+}
+
 int main() {
     std::cout << "test_admin_socket_server:\n";
     test_socket_serves_health_through_request_loop();
@@ -230,6 +266,7 @@ int main() {
     test_socket_rejects_oversized_incomplete_request_and_logs();
     test_socket_times_out_incomplete_request_and_logs();
     test_socket_access_log_event_is_structured_logfmt_ready();
+    test_socket_bind_failure_includes_endpoint_diagnostics();
     std::cout << "All admin socket server tests passed.\n";
     return 0;
 }

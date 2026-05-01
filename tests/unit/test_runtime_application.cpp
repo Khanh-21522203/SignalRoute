@@ -170,6 +170,53 @@ void test_runtime_admin_socket_can_start_from_config_when_sockets_allowed() {
     assert(!app.admin_socket_running());
 }
 
+void test_runtime_records_stop_reason() {
+    signalroute::RuntimeApplication app;
+    app.start(config_for_role("query"));
+
+    app.stop("signal");
+
+    assert(!app.is_running());
+    assert(app.last_stop_reason() == "signal");
+}
+
+void test_runtime_admin_socket_startup_failure_has_endpoint_diagnostics_and_cleans_up() {
+    auto config = config_for_role("query");
+    config.observability.admin_socket_enabled = true;
+    config.observability.admin_socket_addr = "not-an-ip";
+    config.observability.admin_socket_port = 0;
+    config.observability.admin_socket_backlog = 4;
+
+    signalroute::RuntimeApplication app;
+    bool thrown = false;
+    try {
+        app.start(config);
+    } catch (const std::runtime_error& ex) {
+        thrown = true;
+        const std::string message = ex.what();
+        if (message.find("Operation not permitted") != std::string::npos) {
+            assert(app.startup_failed());
+            assert(!app.is_running());
+            assert(app.admin().health().components.size() == 1);
+            return;
+        }
+        assert(message.find("Runtime startup failed") != std::string::npos);
+        assert(message.find("admin socket listen_addr must be an IPv4 address") != std::string::npos);
+        assert(message.find("listen_addr=not-an-ip") != std::string::npos);
+        assert(message.find("port=0") != std::string::npos);
+    }
+
+    assert(thrown);
+    assert(app.startup_failed());
+    assert(!app.is_running());
+    assert(!app.is_healthy());
+    assert(app.last_start_error().find("listen_addr=not-an-ip") != std::string::npos);
+    const auto health = app.admin().health();
+    assert(!health.healthy);
+    assert(health.components.size() == 1);
+    assert(health.components.front().name == "runtime_startup");
+}
+
 void test_required_dependency_readiness_policy_marks_runtime_unready_but_live() {
     auto config = config_for_role("query");
     config.observability.require_redis_readiness = true;
@@ -262,6 +309,8 @@ int main() {
     test_runtime_admin_http_can_be_disabled_by_config();
     test_runtime_admin_socket_disabled_by_default();
     test_runtime_admin_socket_can_start_from_config_when_sockets_allowed();
+    test_runtime_records_stop_reason();
+    test_runtime_admin_socket_startup_failure_has_endpoint_diagnostics_and_cleans_up();
     test_required_dependency_readiness_policy_marks_runtime_unready_but_live();
     test_required_dependency_readiness_policy_can_use_custom_health_source();
     test_runtime_startup_failure_is_reported_to_admin_health();

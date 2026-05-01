@@ -28,6 +28,16 @@ void close_fd(int& fd) {
     throw std::runtime_error(operation + " failed: " + std::strerror(errno));
 }
 
+std::string endpoint_detail(const AdminSocketEndpoint& endpoint) {
+    return "listen_addr=" + endpoint.listen_addr +
+           " port=" + std::to_string(endpoint.port) +
+           " backlog=" + std::to_string(endpoint.backlog);
+}
+
+[[noreturn]] void throw_socket_error(const std::string& operation, const AdminSocketEndpoint& endpoint) {
+    throw std::runtime_error(operation + " failed for " + endpoint_detail(endpoint) + ": " + std::strerror(errno));
+}
+
 AdminHttpRequest parse_http_request(const std::string& raw) {
     AdminHttpRequest request;
 
@@ -122,14 +132,14 @@ void AdminSocketServer::start(AdminSocketEndpoint endpoint) {
     listen_fd_ = ::socket(AF_INET, SOCK_STREAM, 0);
     if (listen_fd_ < 0) {
         lifecycle_state_.store(ServiceLifecycleState::Failed);
-        throw_socket_error("admin socket create");
+        throw_socket_error("admin socket create", endpoint_);
     }
 
     int reuse = 1;
     if (::setsockopt(listen_fd_, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) != 0) {
         lifecycle_state_.store(ServiceLifecycleState::Failed);
         close_fd(listen_fd_);
-        throw_socket_error("admin socket setsockopt");
+        throw_socket_error("admin socket setsockopt", endpoint_);
     }
 
     sockaddr_in addr{};
@@ -138,18 +148,18 @@ void AdminSocketServer::start(AdminSocketEndpoint endpoint) {
     if (::inet_pton(AF_INET, endpoint_.listen_addr.c_str(), &addr.sin_addr) != 1) {
         lifecycle_state_.store(ServiceLifecycleState::Failed);
         close_fd(listen_fd_);
-        throw std::runtime_error("admin socket listen_addr must be an IPv4 address");
+        throw std::runtime_error("admin socket listen_addr must be an IPv4 address: " + endpoint_detail(endpoint_));
     }
 
     if (::bind(listen_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
         lifecycle_state_.store(ServiceLifecycleState::Failed);
         close_fd(listen_fd_);
-        throw_socket_error("admin socket bind");
+        throw_socket_error("admin socket bind", endpoint_);
     }
     if (::listen(listen_fd_, endpoint_.backlog) != 0) {
         lifecycle_state_.store(ServiceLifecycleState::Failed);
         close_fd(listen_fd_);
-        throw_socket_error("admin socket listen");
+        throw_socket_error("admin socket listen", endpoint_);
     }
 
     sockaddr_in actual{};
@@ -157,7 +167,7 @@ void AdminSocketServer::start(AdminSocketEndpoint endpoint) {
     if (::getsockname(listen_fd_, reinterpret_cast<sockaddr*>(&actual), &actual_len) != 0) {
         lifecycle_state_.store(ServiceLifecycleState::Failed);
         close_fd(listen_fd_);
-        throw_socket_error("admin socket getsockname");
+        throw_socket_error("admin socket getsockname", endpoint_);
     }
     bound_port_ = ntohs(actual.sin_port);
 

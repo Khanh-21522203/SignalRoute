@@ -14,6 +14,7 @@
 #include <vector>
 
 std::atomic<bool> g_stop_flag{false};
+std::atomic<int> g_stop_signal{0};
 
 void log_runtime_event(
     const std::string& level,
@@ -27,6 +28,7 @@ void log_runtime_event(
 
 void signal_handler(int sig) {
     if (sig == SIGINT || sig == SIGTERM) {
+        g_stop_signal.store(sig);
         g_stop_flag.store(true);
     }
 }
@@ -96,8 +98,10 @@ int main(int argc, char** argv) {
                 });
         }
 
+        std::string stop_reason = "signal";
         while (!g_stop_flag.load()) {
             if (!app.is_healthy()) {
+                stop_reason = "unhealthy";
                 log_runtime_event(
                     "error",
                     "runtime.unhealthy",
@@ -112,13 +116,17 @@ int main(int argc, char** argv) {
             "info",
             "runtime.stopping",
             "runtime stopping",
-            {{"role", config.server.role}});
-        app.stop();
+            {
+                {"role", config.server.role},
+                {"reason", stop_reason},
+                {"signal", std::to_string(g_stop_signal.load())},
+            });
+        app.stop(stop_reason);
         log_runtime_event(
             "info",
             "runtime.stopped",
             "runtime stopped",
-            {{"role", config.server.role}});
+            {{"role", config.server.role}, {"reason", app.last_stop_reason()}});
     } catch (const std::exception& e) {
         log_runtime_event(
             "error",
@@ -126,7 +134,7 @@ int main(int argc, char** argv) {
             "fatal runtime error",
             {{"role", config.server.role}, {"error", e.what()}});
         if (app.is_running()) {
-            app.stop();
+            app.stop("fatal");
         }
         return 1;
     }

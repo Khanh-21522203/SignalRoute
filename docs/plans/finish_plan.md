@@ -24,9 +24,9 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Geofence fallback evaluation for enter, exit, old-cell exit, dwell, audit, and event publication.
 - Matching fallback service lifecycle, reservation flow, nearest strategy, deadlines, cleanup, typed matching events, and Kafka request/result loop over the shared matching payload codec.
 - Worker fallback `run_once` flows for H3 cleanup, DLQ replay, and metrics export; DLQ replay retries transient history-write failures and defers uncommitted messages after retry exhaustion.
-- Dependency-free admin health and metrics service for component health aggregation, service/dependency/lifecycle probe helpers, split liveness/readiness snapshots, production-adapter readiness policy flags, dependency health source registry, adapter health helpers, Prometheus-text metrics snapshots, transport-neutral health/metrics endpoint responses, configurable HTTP-style health/metrics response binding, runtime exposure, lifecycle-aware in-process admin request loop, runtime-owned configurable loopback-capable TCP admin socket binding, socket read timeout, request-size cap, and structured access-log event support.
+- Dependency-free admin health and metrics service for component health aggregation, service/dependency/lifecycle probe helpers, split liveness/readiness snapshots, production-adapter readiness policy flags, dependency health source registry, adapter health helpers, Prometheus-text metrics snapshots, transport-neutral health/metrics endpoint responses, configurable HTTP-style health/metrics response binding, runtime exposure, lifecycle-aware in-process admin request loop, runtime-owned configurable loopback-capable TCP admin socket binding, socket read timeout, request-size cap, structured access-log event support, and endpoint-aware socket startup failure diagnostics.
 - Dependency-free runtime application composition root that owns role-specific services, validates post-load runtime config, registers process-level admin lifecycle probes, reports startup failures through admin health, aggregates health/readiness, and centralizes graceful stop order.
-- Dependency-free structured logfmt event formatter used by process startup, shutdown, unhealthy, and fatal paths.
+- Dependency-free structured logfmt event formatter used by process startup, shutdown, unhealthy, signal, and fatal paths.
 - Fallback-first dependency build switches in `cmake/SignalRouteOptions.cmake` and central discovery/linking in `cmake/SignalRouteDependencies.cmake`.
 - Stable `signalroute_proto` target that is an interface target in fallback mode, a generated protobuf message library when `SR_ENABLE_PROTOBUF=ON`, and a generated gRPC stub library when `SR_ENABLE_GRPC=ON`.
 - Gated `sr_grpc_transport` adapter target for admin, gateway ingest, and query services; it only compiles when `SR_ENABLE_GRPC=ON`.
@@ -40,7 +40,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Gateway has dependency-free transport handler methods, API-key admission policy, bounded in-flight backpressure contract, readiness/lifecycle snapshots, and a gated gRPC adapter skeleton; real server binding and UDP endpoint remain pending.
 - Query service has dependency-free transport handler methods, readiness/lifecycle snapshots, and a gated gRPC adapter skeleton; real server binding and query HTTP endpoint remain pending.
 - Event bus wiring is implemented for the processor/geofence/metrics fallback path, and process startup now owns role-specific services through `RuntimeApplication`. Cross-role production deployment still needs explicit durable Kafka/protobuf boundaries.
-- Runtime composition exposes configurable admin HTTP health/readiness/metrics responses through a lifecycle-aware request loop and optional config-driven TCP admin socket binding; `/health` is liveness-focused and `/ready` carries service readiness and required Kafka/Redis/PostGIS/H3 dependency health source failures. The admin socket now enforces configured read timeout and max request bytes and can emit structured access logs. Prometheus exporter and gRPC server binding remain pending.
+- Runtime composition exposes configurable admin HTTP health/readiness/metrics responses through a lifecycle-aware request loop and optional config-driven TCP admin socket binding; `/health` is liveness-focused and `/ready` carries service readiness and required Kafka/Redis/PostGIS/H3 dependency health source failures. The admin socket now enforces configured read timeout and max request bytes, can emit structured access logs, and reports endpoint details on startup failures. Runtime shutdown tracks a stop reason for signal, unhealthy, fatal, requested, and destructor paths. Prometheus exporter and gRPC server binding remain pending.
 - Geofence fallback flows and matching Kafka fallback request/result flow are implemented; production adapters, real endpoint transports, and admin CRUD are still pending. Admin has a gated gRPC adapter skeleton, but real server binding remains pending.
 
 ## Engineering Rules
@@ -146,7 +146,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task A3: Composition Root Wiring
 - **Ownership:** `src/runtime/`, `src/main.cpp`, service startup wiring files if introduced.
-- **Status:** Done fallback for role-specific runtime ownership, admin probes, and shutdown order; production cross-role wiring pending.
+- **Status:** Done fallback for role-specific runtime ownership, admin probes, shutdown order, stop reason tracking, and admin socket startup failure cleanup; production cross-role wiring pending.
 - **Goal:** Centralize in-process event wiring by role.
 - **Items:** create shared `EventBus`, wire processor/state/history/geofence/metrics subscriptions, keep role boundaries clear.
 - **Depends on:** A1, A2.
@@ -304,7 +304,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task N1: Observability And Admin
 - **Ownership:** `src/common/metrics/`, `src/common/admin/`, admin proto/service, observability tests.
-- **Status:** Dependency-free admin health aggregation, service/dependency/lifecycle probe helpers, split liveness/readiness snapshots, configurable production-adapter readiness policy flags, dependency health source registry, adapter health helpers, metrics snapshot service, transport-neutral endpoint handler, configurable HTTP-style health/metrics binding, runtime composition exposure, lifecycle-aware in-process admin request loop, optional runtime-owned TCP admin socket binding, socket timeout/size hardening, structured socket access-log events, process-level probe registration, and gated gRPC adapter skeleton added; Prometheus exporter and real gRPC server binding pending.
+- **Status:** Dependency-free admin health aggregation, service/dependency/lifecycle probe helpers, split liveness/readiness snapshots, configurable production-adapter readiness policy flags, dependency health source registry, adapter health helpers, metrics snapshot service, transport-neutral endpoint handler, configurable HTTP-style health/metrics binding, runtime composition exposure, lifecycle-aware in-process admin request loop, optional runtime-owned TCP admin socket binding, socket timeout/size hardening, structured socket access-log events, endpoint-aware socket startup diagnostics, process-level probe registration, and gated gRPC adapter skeleton added; Prometheus exporter and real gRPC server binding pending.
 - **Goal:** Complete metrics, health, readiness, and admin APIs.
 - **Items:** Prometheus exporter, health aggregation, component status events, admin service.
 - **Depends on:** A1/A2, C2.
@@ -739,10 +739,11 @@ Implement background operational jobs and observability.
 - Implement DLQ replay worker.
 - Implement metrics reporter or direct Prometheus exposer.
 - Implement admin health service.
-  - Status: dependency-free health aggregation, service/dependency probe helpers, split liveness/readiness handling, configurable production-adapter readiness policy flags, dependency health source registry, adapter health helpers, metrics snapshot service, transport-neutral endpoint handler, configurable HTTP-style response binding, runtime exposure, lifecycle-aware in-process admin request loop, optional runtime-owned TCP admin socket binding, socket timeout/size hardening, and structured socket access-log events added; gRPC binding pending.
+  - Status: dependency-free health aggregation, service/dependency probe helpers, split liveness/readiness handling, configurable production-adapter readiness policy flags, dependency health source registry, adapter health helpers, metrics snapshot service, transport-neutral endpoint handler, configurable HTTP-style response binding, runtime exposure, lifecycle-aware in-process admin request loop, optional runtime-owned TCP admin socket binding, socket timeout/size hardening, structured socket access-log events, and endpoint-aware socket startup diagnostics added; gRPC binding pending.
 - Add structured logging.
   - Status: dependency-free logfmt formatter added and used by runtime startup/shutdown paths.
 - Add graceful shutdown for all services.
+  - Status: runtime stops services in reverse order and records stop reason for requested, signal, unhealthy, fatal, and destructor-triggered shutdown paths.
 - Add readiness/liveness semantics.
   - Status: common lifecycle snapshots, service readiness APIs, process-level admin registration, split `/health` vs `/ready` semantics, config-driven production dependency readiness requirements, and dependency health source injection added.
 - Add resource limit configuration.
