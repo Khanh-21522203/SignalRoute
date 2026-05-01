@@ -56,6 +56,7 @@ flowchart TB
 | [components.md](./components.md) | Deep-dive into each individual component. Read this when implementing or debugging a specific subsystem. |
 | [plans/dependency_strategy.md](./plans/dependency_strategy.md) | Build switches and dependency integration order for protobuf/gRPC, Kafka, Redis, PostGIS, H3, Prometheus, and toml++. |
 | [plans/ci_and_sanitizers.md](./plans/ci_and_sanitizers.md) | Local CI-equivalent verification commands, sanitizer CMake profiles, and the dependency-backed job matrix. |
+| [plans/container_packaging.md](./plans/container_packaging.md) | Production fallback image contract, Docker build/run commands, mounted config behavior, and current container boundary. |
 
 ### Storage
 
