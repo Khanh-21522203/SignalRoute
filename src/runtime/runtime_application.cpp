@@ -1,5 +1,8 @@
 #include "runtime_application.h"
 
+#include "admin_request_loop.h"
+#include "admin_socket_server.h"
+
 #include <exception>
 #include <stdexcept>
 #include <string>
@@ -51,6 +54,7 @@ void RuntimeApplication::start(const Config& config) {
     config_ = config;
     admin_ = std::make_unique<AdminService>(config_.server.role.empty() ? "invalid" : config_.server.role);
     configure_admin_http();
+    configure_admin_socket();
     startup_failed_ = false;
     last_start_error_.clear();
     roles_ = RuntimeRoleSelection{};
@@ -76,8 +80,10 @@ void RuntimeApplication::start(const Config& config) {
         }
 
         register_admin_probes();
+        start_admin_socket();
         running_ = true;
     } catch (const std::exception& ex) {
+        stop_started_services();
         startup_failed_ = true;
         last_start_error_ = ex.what();
         running_ = false;
@@ -85,6 +91,7 @@ void RuntimeApplication::start(const Config& config) {
         register_startup_failure_probe();
         throw std::runtime_error("Runtime startup failed: " + last_start_error_);
     } catch (...) {
+        stop_started_services();
         startup_failed_ = true;
         last_start_error_ = "unknown runtime startup failure";
         running_ = false;
@@ -99,6 +106,14 @@ void RuntimeApplication::stop() {
         return;
     }
 
+    stop_started_services();
+    running_ = false;
+}
+
+void RuntimeApplication::stop_started_services() {
+    if (admin_socket_) {
+        admin_socket_->stop();
+    }
     if (roles_.gateway) {
         gateway_.stop();
     }
@@ -114,7 +129,6 @@ void RuntimeApplication::stop() {
     if (roles_.processor) {
         processor_.stop();
     }
-    running_ = false;
 }
 
 bool RuntimeApplication::is_running() const {
@@ -198,9 +212,46 @@ AdminHttpResponse RuntimeApplication::handle_admin_http(AdminHttpRequest request
     return admin_http_->handle(std::move(request));
 }
 
+bool RuntimeApplication::admin_socket_enabled() const {
+    return config_.observability.admin_socket_enabled;
+}
+
+bool RuntimeApplication::admin_socket_running() const {
+    return admin_socket_ && admin_socket_->is_running();
+}
+
+uint16_t RuntimeApplication::admin_socket_bound_port() const {
+    return admin_socket_ ? admin_socket_->bound_port() : 0;
+}
+
+ServiceHealthSnapshot RuntimeApplication::admin_socket_health_snapshot() const {
+    return admin_socket_ ? admin_socket_->health_snapshot() : stopped_health("admin socket disabled");
+}
+
 void RuntimeApplication::configure_admin_http() {
     admin_endpoint_ = std::make_unique<AdminEndpointHandler>(*admin_);
     admin_http_ = std::make_unique<AdminHttpHandler>(*admin_endpoint_, routes_from_config(config_));
+}
+
+void RuntimeApplication::configure_admin_socket() {
+    admin_request_loop_.reset();
+    admin_socket_.reset();
+    if (!config_.observability.admin_socket_enabled) {
+        return;
+    }
+    admin_request_loop_ = std::make_unique<AdminRequestLoop>(*this);
+    admin_socket_ = std::make_unique<AdminSocketServer>(*admin_request_loop_);
+}
+
+void RuntimeApplication::start_admin_socket() {
+    if (!admin_socket_) {
+        return;
+    }
+    admin_socket_->start(AdminSocketEndpoint{
+        config_.observability.admin_socket_addr,
+        static_cast<uint16_t>(config_.observability.admin_socket_port),
+        config_.observability.admin_socket_backlog,
+    });
 }
 
 void RuntimeApplication::register_runtime_probe() {
@@ -231,6 +282,9 @@ void RuntimeApplication::register_admin_probes() {
     }
     if (roles_.matching) {
         admin_->register_lifecycle_probe("matcher", [this] { return matching_.health_snapshot(); });
+    }
+    if (admin_socket_) {
+        admin_->register_lifecycle_probe("admin_socket", [this] { return admin_socket_->health_snapshot(); }, false);
     }
     register_dependency_readiness_probes();
     admin_->register_dependency_probe("event_bus", [] { return true; }, false);

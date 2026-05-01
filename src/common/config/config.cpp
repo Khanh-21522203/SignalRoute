@@ -268,6 +268,12 @@ void require_port(int value, const std::string& name) {
     }
 }
 
+void require_port_or_zero(int value, const std::string& name) {
+    if (value < 0 || value > 65535) {
+        throw std::runtime_error("Invalid config: " + name + " must be between 0 and 65535");
+    }
+}
+
 void require_path(const std::string& value, const std::string& name) {
     require_non_empty(value, name);
     if (value.front() != '/') {
@@ -352,6 +358,9 @@ void validate_config(const Config& config) {
     require_non_empty(config.observability.metrics_addr, "observability.metrics_addr");
     require_port(config.observability.metrics_port, "observability.metrics_port");
     require_path(config.observability.metrics_path, "observability.metrics_path");
+    require_non_empty(config.observability.admin_socket_addr, "observability.admin_socket_addr");
+    require_port_or_zero(config.observability.admin_socket_port, "observability.admin_socket_port");
+    require_positive(config.observability.admin_socket_backlog, "observability.admin_socket_backlog");
     require_path(config.observability.health_path, "observability.health_path");
     require_path(config.observability.readiness_path, "observability.readiness_path");
     const std::set<std::string> log_levels = {"trace", "debug", "info", "warn", "error"};
@@ -477,6 +486,30 @@ Config Config::load(const std::string& path) {
         get_string(sections, "observability", "log_level", config.observability.log_level, path);
     config.observability.admin_http_enabled =
         get_bool(sections, "observability", "admin_http_enabled", config.observability.admin_http_enabled, path);
+    config.observability.admin_socket_enabled =
+        get_bool(sections,
+                 "observability",
+                 "admin_socket_enabled",
+                 config.observability.admin_socket_enabled,
+                 path);
+    config.observability.admin_socket_addr =
+        get_string(sections,
+                   "observability",
+                   "admin_socket_addr",
+                   config.observability.admin_socket_addr,
+                   path);
+    config.observability.admin_socket_port =
+        get_int(sections,
+                "observability",
+                "admin_socket_port",
+                config.observability.admin_socket_port,
+                path);
+    config.observability.admin_socket_backlog =
+        get_int(sections,
+                "observability",
+                "admin_socket_backlog",
+                config.observability.admin_socket_backlog,
+                path);
     config.observability.health_path =
         get_string(sections, "observability", "health_path", config.observability.health_path, path);
     config.observability.readiness_path =

@@ -115,6 +115,10 @@ struct ObservabilityConfig {
     std::string metrics_path = "/metrics";
     std::string log_level    = "info";
     bool        admin_http_enabled = true;
+    bool        admin_socket_enabled = false;
+    std::string admin_socket_addr = "127.0.0.1";
+    int         admin_socket_port = 9101;
+    int         admin_socket_backlog = 16;
     std::string health_path = "/health";
     std::string readiness_path = "/ready";
     bool        require_kafka_readiness = false;

@@ -125,6 +125,49 @@ void test_runtime_admin_http_can_be_disabled_by_config() {
     app.stop();
 }
 
+void test_runtime_admin_socket_disabled_by_default() {
+    signalroute::RuntimeApplication app;
+    app.start(config_for_role("query"));
+
+    assert(!app.admin_socket_enabled());
+    assert(!app.admin_socket_running());
+    assert(app.admin_socket_bound_port() == 0);
+    assert(app.admin_socket_health_snapshot().state == signalroute::ServiceLifecycleState::Stopped);
+
+    app.stop();
+}
+
+void test_runtime_admin_socket_can_start_from_config_when_sockets_allowed() {
+    auto config = config_for_role("query");
+    config.observability.admin_socket_enabled = true;
+    config.observability.admin_socket_addr = "127.0.0.1";
+    config.observability.admin_socket_port = 0;
+    config.observability.admin_socket_backlog = 4;
+
+    signalroute::RuntimeApplication app;
+    try {
+        app.start(config);
+    } catch (const std::runtime_error& ex) {
+        const std::string message = ex.what();
+        if (message.find("Operation not permitted") != std::string::npos) {
+            assert(app.startup_failed());
+            assert(!app.is_running());
+            assert(app.admin().health().components.size() == 1);
+            return;
+        }
+        throw;
+    }
+
+    assert(app.admin_socket_enabled());
+    assert(app.admin_socket_running());
+    assert(app.admin_socket_bound_port() > 0);
+    assert(app.admin_socket_health_snapshot().ready);
+    assert(app.admin().health().component_healthy("admin_socket"));
+
+    app.stop();
+    assert(!app.admin_socket_running());
+}
+
 void test_required_dependency_readiness_policy_marks_runtime_unready_but_live() {
     auto config = config_for_role("query");
     config.observability.require_redis_readiness = true;
@@ -215,6 +258,8 @@ int main() {
     test_gateway_runtime_registers_only_gateway_probe();
     test_runtime_exposes_admin_http_handler_with_configured_routes();
     test_runtime_admin_http_can_be_disabled_by_config();
+    test_runtime_admin_socket_disabled_by_default();
+    test_runtime_admin_socket_can_start_from_config_when_sockets_allowed();
     test_required_dependency_readiness_policy_marks_runtime_unready_but_live();
     test_required_dependency_readiness_policy_can_use_custom_health_source();
     test_runtime_startup_failure_is_reported_to_admin_health();

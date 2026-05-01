@@ -1,7 +1,7 @@
 # SignalRoute Dependency Strategy
 
 ## Purpose
-Batch 17 established the build contract for production dependencies without replacing the fallback runtime. Batch 18 added domain-to-wire conversion contracts. Batch 19 adds protobuf-only generated builds and keeps gRPC stubs optional because local gRPC packages may not be installed. Batch 43 keeps that contract while adding adapter health helpers and a minimal admin socket binding.
+Batch 17 established the build contract for production dependencies without replacing the fallback runtime. Batch 18 added domain-to-wire conversion contracts. Batch 19 adds protobuf-only generated builds and keeps gRPC stubs optional because local gRPC packages may not be installed. Batch 44 keeps that contract while wiring the minimal admin socket binding into runtime config and startup ownership.
 
 ## Default Build Mode
 The default build is fallback mode:
@@ -92,4 +92,4 @@ Do not remove fallback behavior when enabling a real dependency. Each production
 | Readiness-critical adapter missing | Set `observability.require_redis_readiness = true` in fallback build | `/health` remains liveness `200`; `/ready` reports `503` with a required `redis` component from the dependency health registry |
 
 ## Current Boundary
-Batch 43 adds adapter-facing health helpers for Kafka producer/consumer, Redis, PostGIS, and H3, and adds a minimal TCP admin socket server over `AdminRequestLoop`. Defaults remain dependency-free. Local fallback and protobuf builds pass; loopback socket tests require unsandboxed execution in this environment because sandboxed socket creation returns `EPERM`. The gRPC configure check still fails clearly at `find_package(gRPC)` because local gRPC CMake packages are not installed, so package-backed adapter compile verification remains pending. gRPC service stubs and adapters remain gated by `SR_ENABLE_GRPC`.
+Batch 44 wires the minimal TCP admin socket server over `AdminRequestLoop` into `RuntimeApplication` behind `observability.admin_socket_*` config fields. The default remains disabled and dependency-free. Local fallback and protobuf builds pass; loopback socket tests require unsandboxed execution in this environment because sandboxed socket creation returns `EPERM`. The gRPC configure check still fails clearly at `find_package(gRPC)` because local gRPC CMake packages are not installed, so package-backed adapter compile verification remains pending. gRPC service stubs and adapters remain gated by `SR_ENABLE_GRPC`.

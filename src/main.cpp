@@ -85,6 +85,16 @@ int main(int argc, char** argv) {
             "runtime.started",
             "runtime started",
             {{"role", config.server.role}});
+        if (app.admin_socket_enabled()) {
+            log_runtime_event(
+                "info",
+                "admin.socket_started",
+                "admin socket started",
+                {
+                    {"addr", config.observability.admin_socket_addr},
+                    {"port", std::to_string(app.admin_socket_bound_port())},
+                });
+        }
 
         while (!g_stop_flag.load()) {
             if (!app.is_healthy()) {
