@@ -1,4 +1,9 @@
 #include "common/admin/dependency_health.h"
+#include "common/clients/postgres_client.h"
+#include "common/clients/redis_client.h"
+#include "common/kafka/kafka_consumer.h"
+#include "common/kafka/kafka_producer.h"
+#include "common/spatial/h3_index.h"
 
 #include <cassert>
 #include <iostream>
@@ -58,12 +63,32 @@ void test_default_registry_has_known_dependency_sources() {
     assert(registry.check("h3").name == "h3");
 }
 
+void test_adapter_health_helpers_use_existing_adapter_interfaces() {
+    signalroute::KafkaProducer producer(signalroute::KafkaConfig{});
+    signalroute::KafkaConsumer consumer(signalroute::KafkaConfig{}, {"dependency-health-topic"});
+    signalroute::RedisClient redis(signalroute::RedisConfig{});
+    signalroute::PostgresClient postgis(signalroute::PostGISConfig{});
+    signalroute::H3Index h3(7);
+
+    assert(signalroute::kafka_producer_health(producer).healthy);
+    assert(signalroute::kafka_producer_health(producer).detail == "kafka producer connected");
+    assert(signalroute::kafka_consumer_health(consumer).healthy);
+    assert(signalroute::kafka_consumer_health(consumer).detail == "kafka consumer connected");
+    assert(signalroute::redis_health(redis).healthy);
+    assert(signalroute::redis_health(redis).detail == "redis ping ok");
+    assert(signalroute::postgis_health(postgis).healthy);
+    assert(signalroute::postgis_health(postgis).detail == "postgis ping ok");
+    assert(signalroute::h3_health(h3).healthy);
+    assert(signalroute::h3_health(h3).detail == "h3 index ready");
+}
+
 int main() {
     std::cout << "test_dependency_health_sources:\n";
     test_build_flag_source_reports_enabled_and_disabled_states();
     test_registry_reports_missing_source_as_unhealthy();
     test_registry_uses_registered_source_and_fills_missing_name();
     test_default_registry_has_known_dependency_sources();
+    test_adapter_health_helpers_use_existing_adapter_interfaces();
     std::cout << "All dependency health source tests passed.\n";
     return 0;
 }

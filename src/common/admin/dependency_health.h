@@ -8,6 +8,12 @@
 
 namespace signalroute {
 
+class H3Index;
+class KafkaConsumer;
+class KafkaProducer;
+class PostgresClient;
+class RedisClient;
+
 struct DependencyHealthSnapshot {
     std::string name;
     bool healthy = false;
@@ -28,6 +34,11 @@ private:
 };
 
 [[nodiscard]] DependencyHealthSnapshot build_flag_dependency_health(std::string name, bool enabled);
+[[nodiscard]] DependencyHealthSnapshot kafka_producer_health(const KafkaProducer& producer);
+[[nodiscard]] DependencyHealthSnapshot kafka_consumer_health(const KafkaConsumer& consumer);
+[[nodiscard]] DependencyHealthSnapshot redis_health(RedisClient& redis);
+[[nodiscard]] DependencyHealthSnapshot postgis_health(PostgresClient& postgis);
+[[nodiscard]] DependencyHealthSnapshot h3_health(const H3Index& h3);
 [[nodiscard]] DependencyHealthRegistry default_dependency_health_registry();
 
 } // namespace signalroute
