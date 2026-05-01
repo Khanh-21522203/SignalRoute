@@ -40,9 +40,8 @@ Metrics& Metrics::instance() {
 }
 
 void Metrics::initialize(const std::string& /*addr*/, int /*port*/, const std::string& /*path*/) {
-    // TODO: Create prometheus-cpp registry
-    // TODO: Register all counters, gauges, and histograms
-    // TODO: Start HTTP exposer on addr:port/path
+    // TODO: Create prometheus-cpp registry and register counters, gauges, and histograms.
+    // The dependency-free runtime MetricsExporter owns socket binding for fallback builds.
 }
 
 void Metrics::inc_ingest_received(int64_t count) { inc_counter("ingest_received_total", count); }

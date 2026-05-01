@@ -94,5 +94,15 @@ The profile-mounted config is `config/signalroute.docker.toml`. It points to Com
 
 Important boundary: this config does not enable real adapters by itself. The current Docker image is still built without `SR_ENABLE_REAL_KAFKA`, `SR_ENABLE_REAL_REDIS`, `SR_ENABLE_REAL_POSTGIS`, or `SR_ENABLE_REAL_H3`.
 
+## CI Dependency Service Scaffold
+The GitHub Actions workflow includes a manual `dependency-service-scaffold` job. Start it with `workflow_dispatch` and `run_dependency_scaffold=true`.
+
+That job:
+- validates `compose.yml`;
+- starts Redis and PostGIS as GitHub Actions service containers;
+- starts Redpanda through Docker with the same exposed Kafka/admin ports used by local Compose;
+- verifies service readiness with `redis-cli`, `pg_isready`/`psql`, and `rpk`;
+- builds a focused fallback runtime smoke without enabling real adapter CMake switches.
+
 ## Current Boundary
-The image proves reproducible packaging for the fallback runtime, and Compose provides local dependency containers for future adapter integration. Production adapter images and real dependency-backed integration tests remain pending until package/service provisioning is ready.
+The image proves reproducible packaging for the fallback runtime, Compose provides local dependency containers, and CI can manually validate dependency service provisioning. Production adapter images and real dependency-backed integration tests remain pending until package installation and adapter-specific integration tests are ready.

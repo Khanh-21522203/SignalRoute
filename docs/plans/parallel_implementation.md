@@ -10,7 +10,7 @@ This file defines the preparation required before running multiple agents or dev
 - Durable cross-process communication remains Kafka.
 - The tracked completion roadmap is `docs/plans/finish_plan.md`.
 - Dependency strategy is tracked in `docs/plans/dependency_strategy.md`.
-- Hosted CI plus local sanitizer commands are tracked in `docs/plans/ci_and_sanitizers.md`; use `scripts/verify-local.sh` for dependency-free fallback/protobuf verification.
+- Hosted CI plus local sanitizer commands are tracked in `docs/plans/ci_and_sanitizers.md`; use `scripts/verify-local.sh` for dependency-free fallback/protobuf verification. A manual dependency service scaffold exists for Redis/PostGIS/Redpanda provisioning checks, but it does not enable real adapter switches.
 - Production fallback container packaging and Docker Compose dependency scaffolding are tracked in `docs/plans/container_packaging.md`; real adapter wiring remains a separate future scope.
 - Gateway, processor, geofence, matching payload codecs, and DLQ replay use shared codecs. Protobuf payloads are emitted when `SR_ENABLE_PROTOBUF=ON`; CSV remains fallback-build scaffolding and decoder compatibility.
 - Gateway and query now expose dependency-free transport-facing request/response handlers over existing service methods plus gated gRPC adapter skeletons. Gateway transport handlers also have optional API-key admission and bounded in-flight backpressure contracts. Real gRPC server binding and UDP/HTTP endpoints remain pending.
@@ -136,4 +136,4 @@ Do not run these at the same time without coordination:
 - CMake dependency strategy and any task adding external dependencies
 
 ## Next Recommended Implementation Task
-Continue with dependency-free operations work while gRPC packages remain unavailable: add dependency-backed CI service jobs once packages are available, production adapter container images, or package-backed prometheus-cpp registry integration. If gRPC packages are installed, compile `SR_ENABLE_GRPC=ON`, fix any package-backed adapter compile issues, then add a minimal server composition object that registers admin/gateway/query gRPC services by role. Keep CSV fallback decoding until durable Kafka integration tests pass.
+Continue with dependency-free operations work while gRPC packages remain unavailable: add production adapter container images, package-backed prometheus-cpp registry integration, or real adapter integration tests that consume the manual Redis/PostGIS/Redpanda CI scaffold. If gRPC packages are installed, compile `SR_ENABLE_GRPC=ON`, fix any package-backed adapter compile issues, then add a minimal server composition object that registers admin/gateway/query gRPC services by role. Keep CSV fallback decoding until durable Kafka integration tests pass.

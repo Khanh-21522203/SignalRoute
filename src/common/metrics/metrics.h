@@ -4,8 +4,8 @@
  * SignalRoute — Prometheus Metrics
  *
  * Centralized metric registration and export for all services.
- * Each service registers its metrics at startup; the MetricsReporter
- * background worker exports them on a timer.
+ * Each service updates the singleton registry. The runtime metrics exporter
+ * serves the current snapshot over the configured scrape endpoint.
  *
  * Dependencies: prometheus-cpp
  */

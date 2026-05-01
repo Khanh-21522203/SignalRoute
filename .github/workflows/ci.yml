@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      run_dependency_scaffold:
+        description: Run manual Redis/PostGIS/Redpanda service scaffold checks
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -71,3 +77,93 @@ jobs:
 
       - name: Run focused sanitizer smoke
         run: ctest --test-dir /tmp/signalroute-asan-ubsan-build -R 'test_admin_http_handler|test_config_loader|test_runtime_application' --output-on-failure
+
+  dependency-service-scaffold:
+    name: dependency service scaffold
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_dependency_scaffold }}
+    services:
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      postgis:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: signalroute
+          POSTGRES_USER: sr_user
+          POSTGRES_PASSWORD: sr_pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sr_user -d signalroute"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Compose scaffold
+        run: docker compose -f compose.yml config
+
+      - name: Verify Redis service
+        run: docker run --rm --network host redis:7.4-alpine redis-cli -h 127.0.0.1 -p 6379 ping
+
+      - name: Verify PostGIS service
+        env:
+          PGPASSWORD: sr_pass
+        run: |
+          docker run --rm --network host -e PGPASSWORD postgres:16-alpine \
+            pg_isready -h 127.0.0.1 -p 5432 -U sr_user -d signalroute
+          docker run --rm --network host -e PGPASSWORD postgres:16-alpine \
+            psql -h 127.0.0.1 -p 5432 -U sr_user -d signalroute -c 'SELECT PostGIS_Version();'
+
+      - name: Start Redpanda
+        run: |
+          docker run -d --name signalroute-redpanda \
+            -p 9092:9092 \
+            -p 9644:9644 \
+            docker.redpanda.com/redpandadata/redpanda:v24.2.7 \
+            redpanda start \
+              --overprovisioned \
+              --smp 1 \
+              --memory 512M \
+              --reserve-memory 0M \
+              --node-id 0 \
+              --check=false \
+              --kafka-addr PLAINTEXT://0.0.0.0:9092 \
+              --advertise-kafka-addr PLAINTEXT://127.0.0.1:9092 \
+              --rpc-addr 0.0.0.0:33145 \
+              --advertise-rpc-addr 127.0.0.1:33145
+
+      - name: Verify Redpanda service
+        run: |
+          for attempt in $(seq 1 60); do
+            if docker exec signalroute-redpanda rpk cluster info --brokers=127.0.0.1:9092; then
+              docker exec signalroute-redpanda rpk topic create signalroute-ci-smoke --brokers=127.0.0.1:9092
+              docker exec signalroute-redpanda rpk topic list --brokers=127.0.0.1:9092
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs signalroute-redpanda
+          exit 1
+
+      - name: Build fallback runtime smoke
+        run: |
+          cmake -S . -B /tmp/signalroute-dependency-build -DSR_BUILD_TESTS=ON
+          cmake --build /tmp/signalroute-dependency-build --target signalroute test_config_loader -j2
+          ctest --test-dir /tmp/signalroute-dependency-build -R test_config_loader --output-on-failure
+
+      - name: Stop Redpanda
+        if: always()
+        run: |
+          docker logs signalroute-redpanda || true
+          docker rm -f signalroute-redpanda || true

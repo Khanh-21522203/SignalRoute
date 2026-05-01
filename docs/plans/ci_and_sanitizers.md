@@ -1,7 +1,7 @@
 # CI And Sanitizer Plan
 
 ## Purpose
-This document records the dependency-free CI command matrix and local sanitizer profile. Production dependency jobs stay documented but disabled until the required packages and services exist in the runner image.
+This document records the dependency-free CI command matrix, local sanitizer profile, and manual dependency service scaffold. Production adapter tests stay gated until the required CMake packages and service-backed integration tests exist.
 
 ## Local Verification Script
 Run the default CI-equivalent local checks with:
@@ -50,6 +50,7 @@ ThreadSanitizer is intentionally mutually exclusive with ASan/UBSan in `cmake/Si
 | fallback-unit | yes | `.github/workflows/ci.yml` runs fallback configure/build/CTest |
 | protobuf-unit | yes | `.github/workflows/ci.yml` installs only protobuf packages, then runs protobuf configure/build/CTest |
 | asan-ubsan | yes | `.github/workflows/ci.yml` runs focused sanitizer smoke with `ASAN_OPTIONS=detect_leaks=0` |
+| dependency-service-scaffold | manual | `workflow_dispatch` with `run_dependency_scaffold=true`; validates Redis, PostGIS, Redpanda, Compose config, and fallback runtime build smoke |
 | tsan-smoke | optional/manual | configure/build with `-DSR_ENABLE_TSAN=ON`; select focused concurrency tests first |
 | grpc-package | no | Enable after `gRPC::grpc++` and `gRPC::grpc_cpp_plugin` are installed |
 | kafka-integration | no | Enable after RdKafka package and broker service are available |
@@ -64,8 +65,9 @@ Current jobs:
 - `fallback-unit`: dependency-free fallback configure/build/CTest.
 - `protobuf-unit`: installs `libprotobuf-dev` and `protobuf-compiler`, then runs protobuf configure/build/CTest.
 - `asan-ubsan`: dependency-free focused sanitizer smoke over admin HTTP, config, and runtime application tests.
+- `dependency-service-scaffold`: manual-only service scaffold that starts Redis and PostGIS as GitHub Actions services, starts Redpanda through Docker, validates service readiness, validates `compose.yml`, and builds a focused fallback runtime smoke.
 
-Dependency-backed jobs for gRPC, Kafka, Redis, PostGIS, and H3 remain intentionally absent until package/service provisioning is ready.
+Run the manual scaffold from GitHub Actions with `workflow_dispatch` and `run_dependency_scaffold=true`. This job does not set `SR_ENABLE_REAL_KAFKA`, `SR_ENABLE_REAL_REDIS`, `SR_ENABLE_REAL_POSTGIS`, or `SR_ENABLE_REAL_H3`; it proves service provisioning only. Package-backed adapter jobs remain separate until the corresponding CMake packages are available.
 
 ## Current Boundary
-Batch 48 adds the hosted GitHub Actions workflow for fallback, protobuf, and focused ASan+UBSan smoke. Dependency-backed jobs remain documented placeholders until their packages and service containers are available.
+Batch 52 adds a manual dependency service scaffold to the hosted GitHub Actions workflow. Default push and pull request CI remains dependency-free fallback, protobuf, and focused ASan+UBSan. Real dependency-backed adapter jobs remain pending until package installation and integration tests are added.
