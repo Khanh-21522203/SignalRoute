@@ -60,6 +60,8 @@ Adapter build args:
 
 Important boundary: this image scaffold does not make unavailable packages appear. If a real adapter switch is enabled without the matching package target, CMake should still fail at dependency discovery.
 
+Package-backed adapter images must follow `docs/plans/package_strategy_lock.md` for target names, image tags, build packages, runtime packages, manual CI inputs, and feature-grouped integration labels. Add new adapter image targets one dependency at a time unless the feature integration test requires a coordinated combination.
+
 ## Runtime Contract
 Default command:
 
@@ -170,5 +172,16 @@ That job:
 
 Important boundary: this job proves protobuf package-backed image wiring only. It does not enable real Kafka, Redis, PostGIS, H3, gRPC, Prometheus, or toml++ switches.
 
+## CI Integration Harness
+The GitHub Actions workflow includes a manual `integration-harness` job. Start it with `workflow_dispatch` and `run_integration_harness=true`.
+
+That job:
+- configures with `SR_BUILD_TESTS=ON` and `SR_BUILD_INTEGRATION_TESTS=ON`;
+- builds `test_integration_harness`;
+- runs CTest label `integration`;
+- does not start Kafka, Redis, PostGIS, H3, gRPC, Prometheus, or toml++ services/packages.
+
+Important boundary: this job validates the feature-group integration scaffold only. Real service-backed integration jobs must use the package and label conventions from `docs/plans/package_strategy_lock.md`.
+
 ## Current Boundary
-The default image proves reproducible packaging for the fallback runtime, `Dockerfile.adapters` provides a repeatable image path for package-backed builds, Compose provides local dependency containers, and CI can manually validate dependency service provisioning plus fallback-safe and protobuf-enabled adapter image paths. Real dependency-backed integration tests remain pending until package installation and adapter-specific integration tests are ready.
+The default image proves reproducible packaging for the fallback runtime, `Dockerfile.adapters` provides a repeatable image path for package-backed builds, Compose provides local dependency containers, and CI can manually validate dependency service provisioning plus fallback-safe and protobuf-enabled adapter image paths. The integration harness is available but does not start services. Real dependency-backed integration tests remain pending until package installation and adapter-specific integration tests are ready.

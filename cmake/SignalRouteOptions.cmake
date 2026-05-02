@@ -3,6 +3,7 @@
 # or generated code. Production adapters are enabled explicitly per dependency.
 
 option(SR_BUILD_TESTS "Build SignalRoute tests" ON)
+option(SR_BUILD_INTEGRATION_TESTS "Build manually-gated service-backed integration test harness" OFF)
 
 option(SR_ENABLE_PROTOBUF "Generate and link protobuf message code" OFF)
 option(SR_ENABLE_GRPC "Generate and link gRPC service stubs" OFF)
@@ -31,4 +32,8 @@ endif()
 
 if(SR_ENABLE_TSAN AND (SR_ENABLE_ASAN OR SR_ENABLE_UBSAN))
     message(FATAL_ERROR "SR_ENABLE_TSAN must be used alone; do not combine it with ASan or UBSan")
+endif()
+
+if(SR_BUILD_INTEGRATION_TESTS AND NOT SR_BUILD_TESTS)
+    message(FATAL_ERROR "SR_BUILD_INTEGRATION_TESTS requires SR_BUILD_TESTS=ON")
 endif()

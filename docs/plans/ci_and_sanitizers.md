@@ -1,7 +1,7 @@
 # CI And Sanitizer Plan
 
 ## Purpose
-This document records the dependency-free CI command matrix, local sanitizer profile, and manual dependency service scaffold. Production adapter tests stay gated until the required CMake packages and service-backed integration tests exist.
+This document records the dependency-free CI command matrix, local sanitizer profile, manual dependency service scaffold, and disabled-by-default integration harness. Production adapter tests stay gated until the required CMake packages and service-backed integration tests exist.
 
 ## Local Verification Script
 Run the default CI-equivalent local checks with:
@@ -53,6 +53,7 @@ ThreadSanitizer is intentionally mutually exclusive with ASan/UBSan in `cmake/Si
 | dependency-service-scaffold | manual | `workflow_dispatch` with `run_dependency_scaffold=true`; validates Redis, PostGIS, Redpanda, Compose config, and fallback runtime build smoke |
 | adapter-image-scaffold | manual | `workflow_dispatch` with `run_adapter_image_scaffold=true`; build and smoke-test `Dockerfile.adapters`/`docker buildx bake adapter-scaffold` with all real adapter switches off |
 | adapter-protobuf-image | manual | `workflow_dispatch` with `run_adapter_protobuf_image=true`; builds and smoke-tests the protobuf-enabled adapter image with protobuf packages only |
+| integration-harness | manual | `workflow_dispatch` with `run_integration_harness=true`; builds `SR_BUILD_INTEGRATION_TESTS=ON` and runs the feature-group manifest only |
 | tsan-smoke | optional/manual | configure/build with `-DSR_ENABLE_TSAN=ON`; select focused concurrency tests first |
 | grpc-package | no | Enable after `gRPC::grpc++` and `gRPC::grpc_cpp_plugin` are installed |
 | kafka-integration | no | Enable after RdKafka package and broker service are available |
@@ -70,6 +71,7 @@ Current jobs:
 - `dependency-service-scaffold`: manual-only service scaffold that starts Redis and PostGIS as GitHub Actions services, starts Redpanda through Docker, validates service readiness, validates `compose.yml`, and builds a focused fallback runtime smoke.
 - `adapter-image-scaffold`: manual-only image scaffold job that validates the Docker Bake target, builds `signalroute:adapter-scaffold`, checks the binary exists, and runs a short fallback runtime smoke.
 - `adapter-protobuf-image`: manual-only package-backed image job that validates `adapter-protobuf`, builds `signalroute:adapter-protobuf`, checks runtime shared library resolution with `ldd`, and runs a short protobuf-enabled runtime smoke.
+- `integration-harness`: manual-only harness job that configures `SR_BUILD_INTEGRATION_TESTS=ON`, builds `test_integration_harness`, and runs CTest label `integration` without starting external services.
 
 Run the manual scaffold from GitHub Actions with `workflow_dispatch` and `run_dependency_scaffold=true`. This job does not set `SR_ENABLE_REAL_KAFKA`, `SR_ENABLE_REAL_REDIS`, `SR_ENABLE_REAL_POSTGIS`, or `SR_ENABLE_REAL_H3`; it proves service provisioning only. Package-backed adapter jobs remain separate until the corresponding CMake packages are available.
 
@@ -79,5 +81,7 @@ Run the adapter image scaffold from GitHub Actions with `workflow_dispatch` and 
 
 Run the protobuf adapter image from GitHub Actions with `workflow_dispatch` and `run_adapter_protobuf_image=true`. This job installs protobuf build packages and the protobuf runtime library inside the Docker image only, enables `SR_ENABLE_PROTOBUF=ON`, and keeps real Kafka, Redis, PostGIS, H3, gRPC, Prometheus, and toml++ switches off.
 
+Run the integration harness from GitHub Actions with `workflow_dispatch` and `run_integration_harness=true`. This job validates the feature-group integration manifest only. Real service-backed integration jobs should be added later with labels from `tests/integration/README.md` and package conventions from `docs/plans/package_strategy_lock.md`.
+
 ## Current Boundary
-Batch 55 adds a manual hosted CI job for the protobuf-enabled adapter image. Default push and pull request CI remains dependency-free fallback, protobuf, and focused ASan+UBSan. The protobuf image proves package-backed generated-message packaging only; real Kafka, Redis, PostGIS, H3, gRPC, Prometheus, and toml++ adapter jobs remain pending until package installation and integration tests are added.
+Batch 57 adds a manual hosted CI job for the integration harness manifest. Default push and pull request CI remains dependency-free fallback, protobuf, and focused ASan+UBSan. The protobuf image proves package-backed generated-message packaging only; the integration harness proves feature-group naming and labels only. Real Kafka, Redis, PostGIS, H3, gRPC, Prometheus, and toml++ adapter jobs remain pending until package installation and service-backed integration tests are added.

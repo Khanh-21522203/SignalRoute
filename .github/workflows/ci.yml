@@ -21,6 +21,11 @@ on:
         required: false
         type: boolean
         default: false
+      run_integration_harness:
+        description: Build and run the disabled-by-default integration harness manifest
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -239,3 +244,21 @@ jobs:
             echo "expected timeout exit 124 after clean SIGTERM, got ${status}"
             exit 1
           fi
+
+  integration-harness:
+    name: integration harness
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_integration_harness }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure integration harness
+        run: cmake -S . -B /tmp/signalroute-integration-build -DSR_BUILD_TESTS=ON -DSR_BUILD_INTEGRATION_TESTS=ON
+
+      - name: Build integration harness
+        run: cmake --build /tmp/signalroute-integration-build --target test_integration_harness -j2
+
+      - name: Run integration harness
+        run: ctest --test-dir /tmp/signalroute-integration-build -L integration --output-on-failure

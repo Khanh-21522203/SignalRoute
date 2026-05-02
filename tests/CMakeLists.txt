@@ -232,3 +232,7 @@ add_test(NAME test_metrics_reporter COMMAND test_metrics_reporter)
 add_executable(test_location_state_query unit/test_location_state_query.cpp)
 target_link_libraries(test_location_state_query PRIVATE sr_common sr_processor sr_query)
 add_test(NAME test_location_state_query COMMAND test_location_state_query)
+
+if(SR_BUILD_INTEGRATION_TESTS)
+    add_subdirectory(integration)
+endif()
