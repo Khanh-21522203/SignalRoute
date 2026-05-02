@@ -54,3 +54,17 @@ target "adapter-kafka" {
     SR_ENABLE_REAL_KAFKA = "ON"
   }
 }
+
+target "integration-ingestion" {
+  inherits = ["adapter-scaffold"]
+  target = "adapter-build"
+  tags = ["signalroute:integration-ingestion"]
+  args = {
+    SR_ADAPTER_APT_PACKAGES = "librdkafka-dev libprotobuf-dev protobuf-compiler"
+    SR_BUILD_TESTS = "ON"
+    SR_BUILD_INTEGRATION_TESTS = "ON"
+    SR_ADAPTER_BUILD_TARGETS = "test_ingestion_pipeline"
+    SR_ENABLE_PROTOBUF = "ON"
+    SR_ENABLE_REAL_KAFKA = "ON"
+  }
+}

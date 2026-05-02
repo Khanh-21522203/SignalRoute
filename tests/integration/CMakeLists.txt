@@ -12,3 +12,15 @@ function(sr_add_feature_integration_test target source feature_label)
     add_test(NAME ${target} COMMAND ${target})
     set_tests_properties(${target} PROPERTIES LABELS "integration;${feature_label}")
 endfunction()
+
+if(SR_ENABLE_REAL_KAFKA)
+    sr_add_feature_integration_test(
+        test_ingestion_pipeline
+        test_ingestion_pipeline.cpp
+        "integration:ingestion"
+        sr_common
+        sr_processor)
+    set_tests_properties(test_ingestion_pipeline PROPERTIES
+        SKIP_RETURN_CODE 77
+        TIMEOUT 45)
+endif()

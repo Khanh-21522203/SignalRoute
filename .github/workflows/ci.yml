@@ -31,6 +31,11 @@ on:
         required: false
         type: boolean
         default: false
+      run_ingestion_integration:
+        description: Run broker-backed Kafka ingestion integration tests
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -298,3 +303,64 @@ jobs:
 
       - name: Run integration harness
         run: ctest --test-dir /tmp/signalroute-integration-build -L integration --output-on-failure
+
+  ingestion-integration:
+    name: ingestion integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_ingestion_integration }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Kafka and protobuf packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends librdkafka-dev libprotobuf-dev protobuf-compiler
+
+      - name: Start Redpanda
+        run: |
+          docker run -d --name signalroute-redpanda \
+            -p 9092:9092 \
+            -p 9644:9644 \
+            docker.redpanda.com/redpandadata/redpanda:v24.2.7 \
+            redpanda start \
+              --overprovisioned \
+              --smp 1 \
+              --memory 512M \
+              --reserve-memory 0M \
+              --node-id 0 \
+              --check=false \
+              --kafka-addr PLAINTEXT://0.0.0.0:9092 \
+              --advertise-kafka-addr PLAINTEXT://127.0.0.1:9092 \
+              --rpc-addr 0.0.0.0:33145 \
+              --advertise-rpc-addr 127.0.0.1:33145
+
+      - name: Wait for Redpanda
+        run: |
+          for attempt in $(seq 1 60); do
+            if docker exec signalroute-redpanda rpk cluster info --brokers=127.0.0.1:9092; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs signalroute-redpanda
+          exit 1
+
+      - name: Configure ingestion integration
+        run: cmake -S . -B /tmp/signalroute-ingestion-build -DSR_BUILD_TESTS=ON -DSR_BUILD_INTEGRATION_TESTS=ON -DSR_ENABLE_REAL_KAFKA=ON -DSR_ENABLE_PROTOBUF=ON
+
+      - name: Build ingestion integration
+        run: cmake --build /tmp/signalroute-ingestion-build --target test_ingestion_pipeline -j2
+
+      - name: Run ingestion integration
+        env:
+          SIGNALROUTE_RUN_KAFKA_INTEGRATION: "1"
+          SIGNALROUTE_KAFKA_BROKERS: 127.0.0.1:9092
+        run: ctest --test-dir /tmp/signalroute-ingestion-build -L integration:ingestion --output-on-failure
+
+      - name: Stop Redpanda
+        if: always()
+        run: |
+          docker logs signalroute-redpanda || true
+          docker rm -f signalroute-redpanda || true

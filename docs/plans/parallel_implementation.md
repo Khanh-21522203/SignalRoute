@@ -11,15 +11,15 @@ This file defines the preparation required before running multiple agents or dev
 - The tracked completion roadmap is `docs/plans/finish_plan.md`.
 - Dependency strategy is tracked in `docs/plans/dependency_strategy.md`.
 - Package-backed adapter naming, package candidates, CI promotion rules, and integration feature labels are locked in `docs/plans/package_strategy_lock.md`.
-- Hosted CI plus local sanitizer commands are tracked in `docs/plans/ci_and_sanitizers.md`; use `scripts/verify-local.sh` for dependency-free fallback/protobuf verification. Manual dependency service, adapter image scaffold, protobuf adapter image, and Kafka adapter image jobs exist for Redis/PostGIS/Redpanda provisioning, fallback-safe image checks, protobuf package-backed image checks, and Kafka package-backed image checks, but they do not affect default CI.
-- Production fallback container packaging, adapter image scaffolding, protobuf adapter image packaging, Kafka adapter image packaging, and Docker Compose dependency scaffolding are tracked in `docs/plans/container_packaging.md`; real adapter wiring remains a separate future scope.
-- Feature-grouped integration harness files live under `tests/integration/` and are gated by `SR_BUILD_INTEGRATION_TESTS=ON`. The harness is manual-only and currently validates manifest/labels, not service behavior.
+- Hosted CI plus local sanitizer commands are tracked in `docs/plans/ci_and_sanitizers.md`; use `scripts/verify-local.sh` for dependency-free fallback/protobuf verification. Manual dependency service, adapter image scaffold, protobuf adapter image, Kafka adapter image, and ingestion integration jobs exist for Redis/PostGIS/Redpanda provisioning, fallback-safe image checks, protobuf package-backed image checks, Kafka package-backed image checks, and Redpanda-backed ingestion checks, but they do not affect default CI.
+- Production fallback container packaging, adapter image scaffolding, protobuf adapter image packaging, Kafka adapter image packaging, ingestion integration image packaging, and Docker Compose dependency scaffolding are tracked in `docs/plans/container_packaging.md`; real adapter wiring remains a separate future scope.
+- Feature-grouped integration harness files live under `tests/integration/` and are gated by `SR_BUILD_INTEGRATION_TESTS=ON`. The harness is manual-only; `integration:ingestion` now has Redpanda-backed service behavior coverage when real Kafka and protobuf are enabled.
 - Gateway, processor, geofence, matching payload codecs, and DLQ replay use shared codecs. Protobuf payloads are emitted when `SR_ENABLE_PROTOBUF=ON`; CSV remains fallback-build scaffolding and decoder compatibility.
 - Gateway and query now expose dependency-free transport-facing request/response handlers over existing service methods plus gated gRPC adapter skeletons. Gateway transport handlers also have optional API-key admission and bounded in-flight backpressure contracts. Real gRPC server binding and UDP/HTTP endpoints remain pending.
 - Admin health/metrics now has a dependency-free service boundary for component health aggregation, service/dependency/lifecycle probe helpers, split liveness/readiness snapshots, config-driven production-adapter readiness policy flags, dependency health source registry, adapter health helpers, Prometheus-text metric snapshots, transport-neutral health/metrics endpoint responses, configurable HTTP-style response binding exposed through runtime composition, a lifecycle-aware in-process request loop, optional runtime-owned TCP admin socket binding, runtime-owned fallback metrics scrape socket, socket timeout/size hardening, structured socket access-log events, endpoint-aware socket startup diagnostics, and a gated gRPC adapter skeleton. Real gRPC server binding remains pending.
 - Runtime startup now flows through a dependency-free `RuntimeApplication` composition boundary that owns role-selected services, validates post-load config, registers process-level admin lifecycle probes, reports startup failures through admin health, aggregates readiness/health, and stops services in reverse order.
 - Process startup/shutdown paths emit structured logfmt events through a dependency-free formatter, including shutdown reason and received signal number.
-- Metrics currently has deterministic fallback behavior for unit and lifecycle tests plus an opt-in runtime scrape socket. DLQ replay now retries transient history-write failures and defers uncommitted messages after retry exhaustion. PostGIS keeps deterministic fallback behavior by default and has an optional `SR_ENABLE_REAL_POSTGIS` libpq adapter path pending real-PostGIS verification. Redis keeps deterministic fallback behavior by default and has an optional `SR_ENABLE_REAL_REDIS` redis-plus-plus adapter path pending real-Redis verification. H3 keeps deterministic fallback behavior by default and has an optional `SR_ENABLE_REAL_H3` C API adapter path pending real-H3 verification. Kafka keeps deterministic fallback behavior by default, has an optional `SR_ENABLE_REAL_KAFKA` librdkafka++ adapter path that now compiles in the package-backed image through `FindRdKafka.cmake`, and drives the matching request/result loop through the shared matching codec. Broker-backed integration verification remains pending.
+- Metrics currently has deterministic fallback behavior for unit and lifecycle tests plus an opt-in runtime scrape socket. DLQ replay now retries transient history-write failures and defers uncommitted messages after retry exhaustion. PostGIS keeps deterministic fallback behavior by default and has an optional `SR_ENABLE_REAL_POSTGIS` libpq adapter path pending real-PostGIS verification. Redis keeps deterministic fallback behavior by default and has an optional `SR_ENABLE_REAL_REDIS` redis-plus-plus adapter path pending real-Redis verification. H3 keeps deterministic fallback behavior by default and has an optional `SR_ENABLE_REAL_H3` C API adapter path pending real-H3 verification. Kafka keeps deterministic fallback behavior by default, has an optional `SR_ENABLE_REAL_KAFKA` librdkafka++ adapter path that compiles in package-backed images through `FindRdKafka.cmake`, has Redpanda-backed `integration:ingestion` coverage for produce/consume and processor state/history writes with protobuf payloads, and drives the matching request/result loop through the shared matching codec.
 - Processor/geofence/metrics observer wiring is implemented for in-process fallback composition.
 - Domain-to-wire conversion contracts live under `src/common/proto/`; generated protobuf code should adapt through that boundary.
 
@@ -106,16 +106,14 @@ An agent must report:
 ### 6. Dependency Order
 Start remaining production work in this order unless deliberately coordinated:
 
-1. Broker-backed Kafka compile/integration verification using `adapter-kafka` and Redpanda
-2. Add Kafka feature tests under `integration:ingestion`
-3. Real-H3 compile/integration verification once H3 is installed
-4. Real-Redis compile/integration verification once hiredis/redis++ are installed
-5. Real-PostGIS compile/integration verification once PostgreSQL/libpq and a PostGIS database are available
-6. Gateway gRPC/UDP transport over the existing validation/rate-limit/publish flow
-7. Query gRPC/HTTP transport over the existing latest/nearby/trip handlers
-8. Processor production Kafka-to-state/history loop narrowing CSV fallback parsing
-9. Geofence production registry loading, Kafka event serialization, and admin CRUD
-10. Workers, Prometheus/admin health, retry/backoff, CI, packaging, and performance tests
+1. Real-H3 compile/integration verification once H3 is installed
+2. Real-Redis compile/integration verification once hiredis/redis++ are installed
+3. Real-PostGIS compile/integration verification once PostgreSQL/libpq and a PostGIS database are available
+4. Gateway gRPC/UDP transport over the existing validation/rate-limit/publish flow
+5. Query gRPC/HTTP transport over the existing latest/nearby/trip handlers
+6. Geofence production registry loading, Kafka event serialization, and admin CRUD
+7. Matching broker-backed request/result integration
+8. Workers, Prometheus/admin health, retry/backoff, CI promotion, packaging, and performance tests
 
 ## Safe Initial Parallel Batch
 These tasks can run in parallel with low conflict risk from the current fallback baseline. They are recommended before broad production adapter work because they clarify external dependency choices and preserve existing contracts.
@@ -140,4 +138,4 @@ Do not run these at the same time without coordination:
 - CMake dependency strategy and any task adding external dependencies
 
 ## Next Recommended Implementation Task
-Add broker-backed Kafka ingestion tests next. `adapter-kafka` now builds with Ubuntu `librdkafka-dev` through `FindRdKafka.cmake`; the next implementation should start Redpanda, run an `integration:ingestion` test through real produce/consume, and keep CSV fallback decoding until durable Kafka/protobuf integration tests pass.
+Run real-H3 compile/integration verification next, or split Redis/PostGIS provider work if H3 packages are unavailable. Kafka ingestion now has Redpanda-backed `integration:ingestion` coverage; keep CSV fallback decoding until the remaining Kafka boundaries (geofence, matching, DLQ/workers) have durable protobuf-backed integration tests.

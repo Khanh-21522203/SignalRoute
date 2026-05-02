@@ -55,9 +55,10 @@ ThreadSanitizer is intentionally mutually exclusive with ASan/UBSan in `cmake/Si
 | adapter-protobuf-image | manual | `workflow_dispatch` with `run_adapter_protobuf_image=true`; builds and smoke-tests the protobuf-enabled adapter image with protobuf packages only |
 | adapter-kafka-image | manual | `workflow_dispatch` with `run_adapter_kafka_image=true`; builds and smoke-tests the Kafka-enabled adapter image through `FindRdKafka.cmake` |
 | integration-harness | manual | `workflow_dispatch` with `run_integration_harness=true`; builds `SR_BUILD_INTEGRATION_TESTS=ON` and runs the feature-group manifest only |
+| ingestion-integration | manual | `workflow_dispatch` with `run_ingestion_integration=true`; starts Redpanda, builds with Kafka+protobuf packages, and runs `integration:ingestion` |
 | tsan-smoke | optional/manual | configure/build with `-DSR_ENABLE_TSAN=ON`; select focused concurrency tests first |
 | grpc-package | no | Enable after `gRPC::grpc++` and `gRPC::grpc_cpp_plugin` are installed |
-| kafka-integration | no | Enable after RdKafka package and broker service are available |
+| kafka-integration | manual | Broker-backed ingestion coverage exists under `run_ingestion_integration`; promote only after broader adapter stability |
 | redis-integration | no | Enable after hiredis/redis++ packages and Redis service are available |
 | postgis-integration | no | Enable after libpq/PostGIS packages and database service are available |
 | h3-integration | no | Enable after H3 package is available |
@@ -74,6 +75,7 @@ Current jobs:
 - `adapter-protobuf-image`: manual-only package-backed image job that validates `adapter-protobuf`, builds `signalroute:adapter-protobuf`, checks runtime shared library resolution with `ldd`, and runs a short protobuf-enabled runtime smoke.
 - `adapter-kafka-image`: manual-only package-backed image job that validates `adapter-kafka`, builds `signalroute:adapter-kafka`, checks runtime shared library resolution with `ldd`, and runs a short Kafka-enabled runtime smoke.
 - `integration-harness`: manual-only harness job that configures `SR_BUILD_INTEGRATION_TESTS=ON`, builds `test_integration_harness`, and runs CTest label `integration` without starting external services.
+- `ingestion-integration`: manual-only Redpanda-backed job that installs Kafka plus protobuf packages, builds `test_ingestion_pipeline`, and runs CTest label `integration:ingestion` with `SIGNALROUTE_RUN_KAFKA_INTEGRATION=1`.
 
 Run the manual scaffold from GitHub Actions with `workflow_dispatch` and `run_dependency_scaffold=true`. This job does not set `SR_ENABLE_REAL_KAFKA`, `SR_ENABLE_REAL_REDIS`, `SR_ENABLE_REAL_POSTGIS`, or `SR_ENABLE_REAL_H3`; it proves service provisioning only. Package-backed adapter jobs remain separate until the corresponding CMake packages are available.
 
@@ -85,7 +87,7 @@ Run the protobuf adapter image from GitHub Actions with `workflow_dispatch` and 
 
 Run the Kafka adapter image check from GitHub Actions with `workflow_dispatch` and `run_adapter_kafka_image=true`. This job installs `librdkafka-dev`/`librdkafka++1` inside the Docker image, uses the repository `FindRdKafka.cmake` bridge, enables only `SR_ENABLE_REAL_KAFKA=ON`, and keeps protobuf, gRPC, Redis, PostGIS, H3, Prometheus, and toml++ off.
 
-Run the integration harness from GitHub Actions with `workflow_dispatch` and `run_integration_harness=true`. This job validates the feature-group integration manifest only. Real service-backed integration jobs should be added later with labels from `tests/integration/README.md` and package conventions from `docs/plans/package_strategy_lock.md`.
+Run the integration harness from GitHub Actions with `workflow_dispatch` and `run_integration_harness=true`. This job validates the feature-group integration manifest only. Run the Kafka ingestion integration with `workflow_dispatch` and `run_ingestion_integration=true`; it starts Redpanda and runs `integration:ingestion` against real Kafka plus protobuf packages.
 
 ## Current Boundary
-Batch 60 makes the manual Kafka adapter image target/job buildable through `FindRdKafka.cmake`. Default push and pull request CI remains dependency-free fallback, protobuf, and focused ASan+UBSan. The protobuf image proves package-backed generated-message packaging, the Kafka image proves package-backed compile/runtime linking only, and the integration harness proves feature-group naming and labels. Broker-backed Kafka integration tests remain pending.
+Batches 61-62 add a manual `ingestion-integration` job for broker-backed Kafka ingestion. Default push and pull request CI remains dependency-free fallback, protobuf, and focused ASan+UBSan. The protobuf image proves package-backed generated-message packaging, the Kafka image proves package-backed compile/runtime linking, the integration harness proves feature-group naming and labels, and the ingestion job proves Redpanda-backed produce/consume plus processor state/history writes.

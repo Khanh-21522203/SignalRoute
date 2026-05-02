@@ -46,7 +46,8 @@ Before enabling a new CI image job, verify the package names against the runner 
 |---|---|---|---|
 | 55 | Protobuf | `libprotobuf-dev`, `protobuf-compiler`, and `libprotobuf32t64` build/run successfully in `adapter-protobuf` | Keep protobuf image target available |
 | 58/59 | Kafka | `librdkafka-dev` and `librdkafka++1` install, but no `RdKafkaConfig.cmake` or `rdkafka-config.cmake` is provided | Added explicit provider work in Batch 60 |
-| 60 | Kafka | `cmake/FindRdKafka.cmake` bridges Ubuntu pkg-config/header/library installs to `RdKafka::rdkafka++`; `adapter-kafka` builds and smokes successfully | Use this target for the next broker-backed `integration:ingestion` work |
+| 60 | Kafka | `cmake/FindRdKafka.cmake` bridges Ubuntu pkg-config/header/library installs to `RdKafka::rdkafka++`; `adapter-kafka` builds and smokes successfully | Keep Kafka image target available |
+| 61/62 | Kafka + Protobuf | `integration-ingestion` builds `test_ingestion_pipeline` with real Kafka and protobuf, and Redpanda-backed run verifies produce/consume plus processor state/history writes and committed offsets | Use this as the ingestion regression while expanding real dependency coverage |
 
 ## Feature-Grouped Integration Labels
 
@@ -68,4 +69,4 @@ Before enabling a new CI image job, verify the package names against the runner 
 5. Promote the job to default CI only after it is stable and does not require unavailable external packages.
 
 ## Current Boundary
-`adapter-protobuf` is the first working package-backed image path and enables only generated protobuf messages. `adapter-kafka` now builds with Ubuntu 24.04 `librdkafka-dev` through the explicit `FindRdKafka.cmake` bridge and enables only `SR_ENABLE_REAL_KAFKA=ON`. The integration harness manifest exists and can be built manually, but real service-backed integration tests are still pending. Redis, PostGIS, H3, gRPC, Prometheus, and toml++ remain off by default.
+`adapter-protobuf` is the first working package-backed image path and enables only generated protobuf messages. `adapter-kafka` builds with Ubuntu 24.04 `librdkafka-dev` through the explicit `FindRdKafka.cmake` bridge and enables only `SR_ENABLE_REAL_KAFKA=ON`. `integration-ingestion` builds a Kafka+protobuf test image and the Redpanda-backed `integration:ingestion` test now covers real produce/consume, processor state/history writes, and committed offsets. Redis, PostGIS, H3, gRPC, Prometheus, and toml++ remain off by default.

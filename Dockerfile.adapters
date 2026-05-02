@@ -10,6 +10,8 @@ ARG CMAKE_PREFIX_PATH=""
 ARG CMAKE_TOOLCHAIN_FILE=""
 ARG SR_DEPENDENCY_PROVIDER=system
 ARG SR_BUILD_TESTS=OFF
+ARG SR_BUILD_INTEGRATION_TESTS=OFF
+ARG SR_ADAPTER_BUILD_TARGETS=signalroute
 ARG SR_ENABLE_PROTOBUF=OFF
 ARG SR_ENABLE_GRPC=OFF
 ARG SR_ENABLE_REAL_H3=OFF
@@ -38,6 +40,7 @@ COPY . .
 RUN cmake_args="-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
         -DSR_DEPENDENCY_PROVIDER=${SR_DEPENDENCY_PROVIDER} \
         -DSR_BUILD_TESTS=${SR_BUILD_TESTS} \
+        -DSR_BUILD_INTEGRATION_TESTS=${SR_BUILD_INTEGRATION_TESTS} \
         -DSR_ENABLE_PROTOBUF=${SR_ENABLE_PROTOBUF} \
         -DSR_ENABLE_GRPC=${SR_ENABLE_GRPC} \
         -DSR_ENABLE_REAL_H3=${SR_ENABLE_REAL_H3} \
@@ -53,7 +56,7 @@ RUN cmake_args="-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
         cmake_args="${cmake_args} -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}"; \
     fi \
     && cmake -S . -B /tmp/signalroute-adapter-build ${cmake_args} \
-    && cmake --build /tmp/signalroute-adapter-build -j2 --target signalroute
+    && cmake --build /tmp/signalroute-adapter-build -j2 --target ${SR_ADAPTER_BUILD_TARGETS}
 
 FROM ubuntu:${UBUNTU_VERSION} AS runtime
 

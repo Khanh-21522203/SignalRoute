@@ -55,6 +55,14 @@ docker buildx bake adapter-kafka
 
 `adapter-kafka` installs `librdkafka-dev` in the build stage, installs `librdkafka++1` in the runtime stage, uses `cmake/FindRdKafka.cmake` to bridge Ubuntu pkg-config/header/library installs to `RdKafka::rdkafka++`, and enables only `SR_ENABLE_REAL_KAFKA=ON`.
 
+The Docker Bake file also exposes a broker-backed ingestion build-stage target:
+
+```sh
+docker buildx bake integration-ingestion
+```
+
+`integration-ingestion` installs `librdkafka-dev`, `libprotobuf-dev`, and `protobuf-compiler`, enables `SR_ENABLE_REAL_KAFKA=ON` and `SR_ENABLE_PROTOBUF=ON`, and builds `test_ingestion_pipeline` in the adapter build stage. Run that image against Redpanda with `SIGNALROUTE_RUN_KAFKA_INTEGRATION=1` and `SIGNALROUTE_KAFKA_BROKERS` to verify real ingestion behavior.
+
 Adapter build args:
 
 | Build arg | Default | Purpose |
@@ -64,6 +72,8 @@ Adapter build args:
 | `SR_DEPENDENCY_PROVIDER` | `system` | CMake dependency provider coordination value |
 | `CMAKE_PREFIX_PATH` | empty | Additional package prefix path for system/vcpkg/conan outputs |
 | `CMAKE_TOOLCHAIN_FILE` | empty | Optional toolchain file, for example vcpkg or Conan |
+| `SR_BUILD_INTEGRATION_TESTS` | `OFF` | Build manually gated integration tests when `SR_BUILD_TESTS=ON` |
+| `SR_ADAPTER_BUILD_TARGETS` | `signalroute` | CMake target or targets built by `Dockerfile.adapters` |
 | `SR_ENABLE_*` | `OFF` | Explicit CMake switches for protobuf/gRPC/real adapters/prometheus/toml++ |
 
 Important boundary: this image scaffold does not make unavailable packages appear. If a real adapter switch is enabled without the matching package target, CMake should still fail at dependency discovery.
@@ -188,7 +198,18 @@ That job:
 - attempts to build `signalroute:adapter-kafka` from `Dockerfile.adapters`;
 - verifies the packaged binary and runtime smoke only after the image build succeeds.
 
-Important boundary: this job proves Kafka package compile/runtime linking only. It does not start a broker and does not prove broker-backed publish/consume semantics.
+Important boundary: this job proves Kafka package compile/runtime linking only. Broker-backed publish/consume semantics are covered by the separate ingestion integration job.
+
+## CI Ingestion Integration
+The GitHub Actions workflow includes a manual `ingestion-integration` job. Start it with `workflow_dispatch` and `run_ingestion_integration=true`.
+
+That job:
+- installs `librdkafka-dev`, `libprotobuf-dev`, and `protobuf-compiler`;
+- starts Redpanda through Docker;
+- configures with `SR_BUILD_TESTS=ON`, `SR_BUILD_INTEGRATION_TESTS=ON`, `SR_ENABLE_REAL_KAFKA=ON`, and `SR_ENABLE_PROTOBUF=ON`;
+- builds and runs `test_ingestion_pipeline` with CTest label `integration:ingestion`.
+
+Important boundary: this job proves ingestion Kafka/protobuf transport and processor state/history writes with fallback Redis/PostGIS clients. It does not prove real Redis, real PostGIS, geofence production registry, or matching integration.
 
 ## CI Integration Harness
 The GitHub Actions workflow includes a manual `integration-harness` job. Start it with `workflow_dispatch` and `run_integration_harness=true`.
@@ -202,4 +223,4 @@ That job:
 Important boundary: this job validates the feature-group integration scaffold only. Real service-backed integration jobs must use the package and label conventions from `docs/plans/package_strategy_lock.md`.
 
 ## Current Boundary
-The default image proves reproducible packaging for the fallback runtime, `Dockerfile.adapters` provides a repeatable image path for package-backed builds, Compose provides local dependency containers, and CI can manually validate dependency service provisioning plus fallback-safe, protobuf-enabled, and Kafka-enabled adapter image paths. The integration harness is available but does not start services. Broker-backed Kafka tests and other real dependency-backed integration tests remain pending until adapter-specific integration tests are ready.
+The default image proves reproducible packaging for the fallback runtime, `Dockerfile.adapters` provides repeatable package-backed build paths, Compose provides local dependency containers, and CI can manually validate dependency service provisioning plus fallback-safe, protobuf-enabled, Kafka-enabled, and broker-backed ingestion paths. The integration harness remains available for manifest validation. Real Redis, PostGIS, H3, geofence, matching, and endpoint integration tests remain pending.
