@@ -15,6 +15,10 @@
 #include <stdexcept>
 #include <vector>
 
+#ifndef SIGNALROUTE_HAS_H3
+#define SIGNALROUTE_HAS_H3 0
+#endif
+
 namespace {
 
 template <typename Fn>
@@ -63,11 +67,17 @@ void test_deterministic_cell_generation() {
 
     const int64_t first = h3.lat_lng_to_cell(10.8231, 106.6297);
     const int64_t second = h3.lat_lng_to_cell(10.8231, 106.6297);
-    const int64_t same_bucket = h3.lat_lng_to_cell(10.8231001, 106.6297001);
     const int64_t different_resolution = h3_res8.lat_lng_to_cell(10.8231, 106.6297);
 
+    assert(first != 0);
     assert(first == second);
+#if SIGNALROUTE_HAS_H3
+    const int64_t nearby = h3.lat_lng_to_cell(10.8231001, 106.6297001);
+    assert(nearby != 0);
+#else
+    const int64_t same_bucket = h3.lat_lng_to_cell(10.8231001, 106.6297001);
     assert(first == same_bucket);
+#endif
     assert(first != different_resolution);
     std::cout << "  PASS: deterministic cell generation\n";
 }
@@ -111,6 +121,14 @@ void test_radius_to_k() {
 
 void test_polygon_to_cells_deduplication() {
     signalroute::H3Index h3(7);
+#if SIGNALROUTE_HAS_H3
+    const std::vector<std::pair<double, double>> polygon = {
+        {10.8100, 106.6100},
+        {10.8100, 106.6500},
+        {10.8500, 106.6500},
+        {10.8500, 106.6100},
+    };
+#else
     const std::vector<std::pair<double, double>> polygon = {
         {10.8231, 106.6297},
         {10.8231001, 106.6297001},
@@ -118,12 +136,16 @@ void test_polygon_to_cells_deduplication() {
         {10.8231, 106.6297},
         {10.8241, 106.6307},
     };
+#endif
 
     const auto cells = h3.polygon_to_cells(polygon);
     const std::set<int64_t> unique(cells.begin(), cells.end());
 
+    assert(!cells.empty());
     assert(cells.size() == unique.size());
+#if !SIGNALROUTE_HAS_H3
     assert(cells.size() == 1);
+#endif
     std::cout << "  PASS: polygon_to_cells deduplication\n";
 }
 
@@ -163,6 +185,6 @@ int main() {
     test_polygon_to_cells_deduplication();
     test_polygon_validation_and_empty_input();
     test_average_edge_length_decreases_with_resolution();
-    std::cout << "All H3 fallback tests passed.\n";
+    std::cout << "All H3 index tests passed.\n";
     return 0;
 }

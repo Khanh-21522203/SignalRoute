@@ -55,6 +55,15 @@ docker buildx bake adapter-kafka
 
 `adapter-kafka` installs `librdkafka-dev` in the build stage, installs `librdkafka++1` in the runtime stage, uses `cmake/FindRdKafka.cmake` to bridge Ubuntu pkg-config/header/library installs to `RdKafka::rdkafka++`, and enables only `SR_ENABLE_REAL_KAFKA=ON`.
 
+The Docker Bake file also exposes H3 package-backed targets:
+
+```sh
+docker buildx bake adapter-h3
+docker buildx bake adapter-h3-test
+```
+
+`adapter-h3` installs `libh3-dev` in the build stage, installs `libh3-1` in the runtime stage, uses `cmake/Findh3.cmake` to bridge Ubuntu header/library installs to `h3::h3`, and enables only `SR_ENABLE_REAL_H3=ON`. `adapter-h3-test` builds `test_h3_index` with `SR_ENABLE_REAL_H3=ON` so the package-backed H3 implementation can be verified without installing dependencies locally.
+
 The Docker Bake file also exposes a broker-backed ingestion build-stage target:
 
 ```sh
@@ -200,6 +209,19 @@ That job:
 
 Important boundary: this job proves Kafka package compile/runtime linking only. Broker-backed publish/consume semantics are covered by the separate ingestion integration job.
 
+## CI H3 Adapter Image
+The GitHub Actions workflow includes a manual `adapter-h3-image` job. Start it with `workflow_dispatch` and `run_adapter_h3_image=true`.
+
+That job:
+- validates the `adapter-h3` and `adapter-h3-test` Docker Bake targets;
+- builds `signalroute:adapter-h3` from `Dockerfile.adapters`;
+- verifies the packaged binary and that `libh3.so.1` resolves at runtime;
+- builds `signalroute:adapter-h3-test`;
+- runs `test_h3_index` from the H3 test image;
+- runs a short query-role H3-enabled runtime smoke and expects timeout exit `124` after clean SIGTERM.
+
+Important boundary: this job proves H3 package compile/runtime linking only. Nearby and geofence service-backed behavior still requires Redis/PostGIS provider verification and feature-grouped integration tests.
+
 ## CI Ingestion Integration
 The GitHub Actions workflow includes a manual `ingestion-integration` job. Start it with `workflow_dispatch` and `run_ingestion_integration=true`.
 
@@ -223,4 +245,4 @@ That job:
 Important boundary: this job validates the feature-group integration scaffold only. Real service-backed integration jobs must use the package and label conventions from `docs/plans/package_strategy_lock.md`.
 
 ## Current Boundary
-The default image proves reproducible packaging for the fallback runtime, `Dockerfile.adapters` provides repeatable package-backed build paths, Compose provides local dependency containers, and CI can manually validate dependency service provisioning plus fallback-safe, protobuf-enabled, Kafka-enabled, and broker-backed ingestion paths. The integration harness remains available for manifest validation. Real Redis, PostGIS, H3, geofence, matching, and endpoint integration tests remain pending.
+The default image proves reproducible packaging for the fallback runtime, `Dockerfile.adapters` provides repeatable package-backed build paths, Compose provides local dependency containers, and CI can manually validate dependency service provisioning plus fallback-safe, protobuf-enabled, Kafka-enabled, H3-enabled, and broker-backed ingestion paths. The integration harness remains available for manifest validation. Real Redis, PostGIS, geofence, matching, and endpoint integration tests remain pending; H3 package compile/runtime is verified, but nearby/geofence service-backed H3 behavior still needs Redis/PostGIS-backed integration coverage.

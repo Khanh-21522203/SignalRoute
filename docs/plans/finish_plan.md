@@ -35,8 +35,8 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Protobuf package namespace is `signalroute.v1`, so generated C++ types live under `signalroute::v1` and do not collide with domain types under `signalroute`.
 
 ### Known Boundaries
-- Redis, PostGIS, gRPC, real H3, and Prometheus still need package-backed integration verification. Kafka has package-backed compile and broker-backed ingestion coverage; protobuf message generation is optional and integrated behind `SR_ENABLE_PROTOBUF`.
-- Production dependency switches exist; Kafka, Redis, H3, and PostGIS now have gated adapter paths behind existing interfaces. Kafka has package-backed compile/runtime and Redpanda-backed ingestion verification; other real adapters still need provider-backed verification.
+- Redis, PostGIS, gRPC, and Prometheus still need package-backed integration verification. H3 has package-backed compile/runtime and focused `test_h3_index` verification through `cmake/Findh3.cmake`; nearby/geofence service-backed H3 behavior still depends on Redis/PostGIS integration. Kafka has package-backed compile and broker-backed ingestion coverage; protobuf message generation is optional and integrated behind `SR_ENABLE_PROTOBUF`.
+- Production dependency switches exist; Kafka, Redis, H3, and PostGIS now have gated adapter paths behind existing interfaces. Kafka has package-backed compile/runtime and Redpanda-backed ingestion verification. H3 has package-backed compile/runtime verification. Redis and PostGIS still need provider-backed verification.
 - Package-backed adapter naming, package candidates, manual CI promotion, and integration feature labels are locked in `docs/plans/package_strategy_lock.md`.
 - Kafka package-backed compile verification works with the `system` provider through `cmake/FindRdKafka.cmake`; broker-backed `integration:ingestion` now verifies real Kafka produce/consume and processor state/history writes.
 - The `tests/integration/` harness is gated by `SR_BUILD_INTEGRATION_TESTS=ON`; it validates feature-group metadata by default and includes a Redpanda-backed ingestion test when real Kafka is enabled.
@@ -188,6 +188,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task D1: Spatial Adapter
 - **Ownership:** `src/common/spatial/`, `tests/unit/test_h3_index.cpp`.
+- **Status:** Adapter path added behind `SR_ENABLE_REAL_H3`; package-backed `adapter-h3`/`adapter-h3-test` verification passes with Ubuntu `libh3-dev` through `cmake/Findh3.cmake`; nearby/geofence composed integration pending.
 - **Goal:** Replace deterministic fallback with real H3 behind the same interface.
 - **Items:** coordinate encoding, grid disk, polygon cells, edge cases.
 - **Depends on:** C2.
@@ -401,6 +402,7 @@ Replace the deterministic local grid fallback with real H3 while preserving the 
 - Implement `lat_lng_to_cell` using real H3. (Adapter path added behind `SR_ENABLE_REAL_H3`.)
 - Implement `grid_disk` using real H3. (Adapter path added behind `SR_ENABLE_REAL_H3`.)
 - Implement `polygon_to_cells` using H3 polygon fill. (Adapter path added; overlapping containment mode depends on installed H3 API support.)
+- Package-backed Docker verification now uses Ubuntu `libh3-dev`/`libh3-1` and `cmake/Findh3.cmake` because the packaged `h3Config.cmake` references a missing `h3` CLI path.
 - Verify radius-to-k mapping against documented resolution tables.
 - Add edge-case handling:
   - invalid coordinates
@@ -414,7 +416,7 @@ Replace the deterministic local grid fallback with real H3 while preserving the 
 - Real H3 cells are used in production builds.
 - Unit tests cover stable known H3 outputs where appropriate.
 - Nearby query and geofence prefilter tests pass with real H3.
-- Documentation states exact H3 dependency/version and containment mode.
+- Documentation states exact H3 dependency/version and containment mode. Current package verification uses Ubuntu 24.04 `libh3-dev`/`libh3-1` version `4.1.0-2build1`; containment-mode-sensitive nearby/geofence integration remains pending.
 
 ### Test Targets
 - `test_h3_index`
@@ -932,7 +934,7 @@ Make docs match the implemented system exactly.
 ## Recommended Immediate Next Steps
 
 1. Keep tests feature/function-oriented as new coverage is added.
-2. Clean up config drift and make `config/signalroute.toml` canonical.
-3. Implement TOML parsing and config validation.
-4. Add real `test_dedup_window`, `test_sequence_guard`, `test_state_writer`, and `test_nearby_handler` files.
-5. Pick the dependency strategy before integrating H3, Redis, PostGIS, Kafka, protobuf, and gRPC.
+2. Verify the Redis provider path by choosing a redis-plus-plus source/package overlay or pivot to PostGIS first.
+3. Add service-backed Redis/PostGIS integration tests grouped by feature before composing nearby/geofence production behavior.
+4. Implement real endpoint binding for gateway/query/admin gRPC and UDP/HTTP paths.
+5. Keep H3, Kafka, and protobuf package-backed image jobs manual until service-backed feature integrations are stable enough for default CI.

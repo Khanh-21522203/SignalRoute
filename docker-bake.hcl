@@ -55,6 +55,28 @@ target "adapter-kafka" {
   }
 }
 
+target "adapter-h3" {
+  inherits = ["adapter-scaffold"]
+  tags = ["signalroute:adapter-h3"]
+  args = {
+    SR_ADAPTER_APT_PACKAGES = "libh3-dev"
+    SR_ADAPTER_RUNTIME_APT_PACKAGES = "libh3-1"
+    SR_ENABLE_REAL_H3 = "ON"
+  }
+}
+
+target "adapter-h3-test" {
+  inherits = ["adapter-scaffold"]
+  target = "adapter-build"
+  tags = ["signalroute:adapter-h3-test"]
+  args = {
+    SR_ADAPTER_APT_PACKAGES = "libh3-dev"
+    SR_BUILD_TESTS = "ON"
+    SR_ADAPTER_BUILD_TARGETS = "test_h3_index"
+    SR_ENABLE_REAL_H3 = "ON"
+  }
+}
+
 target "integration-ingestion" {
   inherits = ["adapter-scaffold"]
   target = "adapter-build"

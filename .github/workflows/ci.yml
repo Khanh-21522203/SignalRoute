@@ -26,6 +26,11 @@ on:
         required: false
         type: boolean
         default: false
+      run_adapter_h3_image:
+        description: Build and test the H3-enabled adapter image
+        required: false
+        type: boolean
+        default: false
       run_integration_harness:
         description: Build and run the disabled-by-default integration harness manifest
         required: false
@@ -277,6 +282,45 @@ jobs:
         run: |
           set +e
           timeout 3s docker run --rm signalroute:adapter-kafka \
+            --config=/etc/signalroute/signalroute.toml \
+            --role=query
+          status=$?
+          set -e
+          if [ "${status}" -ne 124 ]; then
+            echo "expected timeout exit 124 after clean SIGTERM, got ${status}"
+            exit 1
+          fi
+
+  adapter-h3-image:
+    name: adapter h3 image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_adapter_h3_image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Bake targets
+        run: |
+          docker buildx bake --print adapter-h3
+          docker buildx bake --print adapter-h3-test
+
+      - name: Build H3 adapter image
+        run: docker buildx bake adapter-h3
+
+      - name: Verify H3 adapter binary
+        run: docker run --rm --entrypoint /bin/sh signalroute:adapter-h3 -c 'test -x /usr/local/bin/signalroute && ldd /usr/local/bin/signalroute | grep -E "libh3\\.so"'
+
+      - name: Build H3 test image
+        run: docker buildx bake adapter-h3-test
+
+      - name: Run H3 package-backed test
+        run: docker run --rm signalroute:adapter-h3-test /tmp/signalroute-adapter-build/tests/test_h3_index
+
+      - name: Smoke H3 adapter runtime
+        run: |
+          set +e
+          timeout 3s docker run --rm signalroute:adapter-h3 \
             --config=/etc/signalroute/signalroute.toml \
             --role=query
           status=$?

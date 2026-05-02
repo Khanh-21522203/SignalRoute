@@ -34,7 +34,7 @@ function(sr_link_one_of description)
 endfunction()
 
 if(SR_ENABLE_REAL_H3)
-    find_package(h3 CONFIG REQUIRED)
+    find_package(h3 REQUIRED)
     sr_link_one_of("H3" h3::h3 h3)
 endif()
 
