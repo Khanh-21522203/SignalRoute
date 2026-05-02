@@ -28,7 +28,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Dependency-free runtime application composition root that owns role-specific services, validates post-load runtime config, registers process-level admin lifecycle probes, reports startup failures through admin health, aggregates health/readiness, and centralizes graceful stop order.
 - Dependency-free structured logfmt event formatter used by process startup, shutdown, unhealthy, signal, and fatal paths.
 - Fallback-first dependency build switches in `cmake/SignalRouteOptions.cmake` and central discovery/linking in `cmake/SignalRouteDependencies.cmake`.
-- Dependency-free local CI verification script, hosted fallback/protobuf/sanitizer CI workflow, production fallback Dockerfile, adapter image scaffold, protobuf adapter image target, Docker Compose dependency scaffold, integration harness manifest, container runtime contract, and CMake sanitizer profiles for ASan, UBSan, and TSan.
+- Dependency-free local CI verification script, hosted fallback/protobuf/sanitizer CI workflow, production fallback Dockerfile, adapter image scaffold, protobuf adapter image target, Kafka adapter image target, Docker Compose dependency scaffold, integration harness manifest, container runtime contract, and CMake sanitizer profiles for ASan, UBSan, and TSan.
 - Stable `signalroute_proto` target that is an interface target in fallback mode, a generated protobuf message library when `SR_ENABLE_PROTOBUF=ON`, and a generated gRPC stub library when `SR_ENABLE_GRPC=ON`.
 - Gated `sr_grpc_transport` adapter target for admin, gateway ingest, and query services; it only compiles when `SR_ENABLE_GRPC=ON`.
 - Dependency-free domain-to-wire conversion contracts under `src/common/proto/` for location, query device state, geofence events, and matching request/result payloads.
@@ -38,6 +38,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Kafka, Redis, PostGIS, gRPC, real H3, and Prometheus still need package-backed integration verification. Protobuf message generation is optional and integrated behind `SR_ENABLE_PROTOBUF`.
 - Production dependency switches exist; Kafka, Redis, H3, and PostGIS now have gated adapter paths behind existing interfaces, but package-backed compile/runtime verification is pending where local packages are unavailable.
 - Package-backed adapter naming, package candidates, manual CI promotion, and integration feature labels are locked in `docs/plans/package_strategy_lock.md`.
+- Kafka package-backed verification is currently blocked with the `system` provider: Ubuntu 24.04 `librdkafka-dev` installs headers/libs but does not provide `RdKafkaConfig.cmake` or `rdkafka-config.cmake` for `find_package(RdKafka CONFIG REQUIRED)`.
 - The `tests/integration/` harness is gated by `SR_BUILD_INTEGRATION_TESTS=ON` and currently validates feature-group metadata only; real service-backed tests are still pending.
 - Gateway, processor, geofence, matching codec, and DLQ replay boundaries now use shared payload codecs that emit protobuf when `SR_ENABLE_PROTOBUF=ON` and preserve CSV fallback decoding for skeleton tests. Real Kafka broker-backed transport verification is still pending.
 - Gateway has dependency-free transport handler methods, API-key admission policy, bounded in-flight backpressure contract, readiness/lifecycle snapshots, and a gated gRPC adapter skeleton; real server binding and UDP endpoint remain pending.
@@ -233,7 +234,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task G1: Kafka Wrapper
 - **Ownership:** `src/common/kafka/`, Kafka tests.
-- **Status:** Done fallback; optional librdkafka++ producer/consumer adapter path added behind `SR_ENABLE_REAL_KAFKA`; broker-backed compile/run verification pending until RdKafka CMake package is installed.
+- **Status:** Done fallback; optional librdkafka++ producer/consumer adapter path added behind `SR_ENABLE_REAL_KAFKA`; `adapter-kafka` Bake target added, but Ubuntu 24.04 `librdkafka-dev` lacks the required `RdKafka` CMake config package, so provider-backed compile/run verification remains blocked.
 - **Goal:** Implement producer/consumer wrappers.
 - **Items:** produce, delivery callbacks, poll, manual commit, lag, health implemented at the wrapper boundary; rebalance callbacks and broker integration tests pending.
 - **Depends on:** C2.
@@ -315,7 +316,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task O1: Packaging And CI
 - **Ownership:** Docker/CI/build docs.
-- **Status:** Local fallback/protobuf verification script, hosted fallback/protobuf/sanitizer CI workflow, manual dependency service scaffold, manual adapter image scaffold job, manual protobuf adapter image job, manual integration harness job, production fallback Dockerfile, adapter image scaffold, protobuf adapter image target, Docker Compose dependency scaffold, integration harness manifest, container runtime contract, and sanitizer CMake profiles added; real dependency-backed adapter images and integration jobs pending.
+- **Status:** Local fallback/protobuf verification script, hosted fallback/protobuf/sanitizer CI workflow, manual dependency service scaffold, manual adapter image scaffold job, manual protobuf adapter image job, manual Kafka adapter image job, manual integration harness job, production fallback Dockerfile, adapter image scaffold, protobuf adapter image target, Kafka adapter image target, Docker Compose dependency scaffold, integration harness manifest, container runtime contract, and sanitizer CMake profiles added; Kafka image target is blocked on a `RdKafka` CMake config provider, and real dependency-backed integration jobs remain pending.
 - **Goal:** Make the project reproducible.
 - **Items:** Docker Compose, production Dockerfile, CI build/test/integration jobs, sanitizer profile.
 - **Depends on:** C2 and enough integration tests to run in CI.
@@ -504,6 +505,8 @@ Implement trip persistence, trip replay, spatial history filters, geofence rule 
 Implement durable messaging and generated protobuf contracts.
 
 Shared payload codecs now cover location, geofence events, matching request/result messages, and DLQ location replay. CSV remains only as fallback-build scaffolding and protobuf-build decoder compatibility. This milestone must still replace the in-memory Kafka fallback with real durable Kafka transport and keep domain code independent of generated protobuf types.
+
+Current package boundary: `adapter-kafka` installs Ubuntu `librdkafka-dev`/`librdkafka++1`, but `SR_ENABLE_REAL_KAFKA=ON` fails at CMake configure because that package does not provide `RdKafkaConfig.cmake` or `rdkafka-config.cmake`. The next Kafka production batch must choose a provider strategy before broker-backed tests can be added.
 
 ### Work Items
 - Enable protobuf and gRPC generation in CMake. (Done for generated protobuf and gated gRPC stubs; local gRPC package availability still required.)
@@ -786,14 +789,14 @@ Make the project reproducible for development, CI, and production deployment.
 - Add production Dockerfile.
   - Status: multi-stage Ubuntu 24.04 Dockerfile builds the fallback runtime with `SR_BUILD_TESTS=OFF` and runs as an unprivileged `signalroute` user.
 - Add adapter image scaffold.
-  - Status: `Dockerfile.adapters` and `docker-bake.hcl` provide a repeatable fallback-safe image path and a protobuf-only package-backed image path. Real adapter switches stay off by default.
+  - Status: `Dockerfile.adapters` and `docker-bake.hcl` provide a repeatable fallback-safe image path, a protobuf-only package-backed image path, and a Kafka package-backed image target that currently documents the missing `RdKafka` CMake config blocker. Real adapter switches stay off by default.
 - Add CI pipeline:
   - format check
   - build
   - unit tests
   - integration tests with services
   - static analysis if available
-  - Status: hosted workflow runs fallback, protobuf, and focused ASan+UBSan smoke jobs. Local CI-equivalent script runs fallback and protobuf configure/build/CTest without installing dependencies. Manual dependency service scaffold verifies Redis/PostGIS/Redpanda service provisioning, manual adapter image scaffold verifies the fallback-safe image path, manual protobuf adapter image CI verifies protobuf package/runtime image wiring, and manual integration harness CI verifies feature labels; real adapter integration jobs remain pending.
+  - Status: hosted workflow runs fallback, protobuf, and focused ASan+UBSan smoke jobs. Local CI-equivalent script runs fallback and protobuf configure/build/CTest without installing dependencies. Manual dependency service scaffold verifies Redis/PostGIS/Redpanda service provisioning, manual adapter image scaffold verifies the fallback-safe image path, manual protobuf adapter image CI verifies protobuf package/runtime image wiring, manual Kafka adapter image CI exposes the current `RdKafka` provider blocker, and manual integration harness CI verifies feature labels; real adapter integration jobs remain pending.
 - Add sanitizers profile for local/CI runs.
   - Status: CMake switches added for ASan, UBSan, and TSan. ASan+UBSan is the default sanitizer profile; TSan is intentionally separate.
 - Add benchmark/load test entrypoints.

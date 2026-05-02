@@ -31,7 +31,7 @@ Ubuntu 24.04 package names in this table were checked against the Ubuntu package
 |---|---|---|---|---|---|---|
 | Protobuf | `SR_ENABLE_PROTOBUF` | `find_package(Protobuf REQUIRED)` | `protobuf::libprotobuf`, `protobuf::protoc` | `libprotobuf-dev protobuf-compiler` | `libprotobuf32t64` | `integration:ingestion`, `integration:geofence`, `integration:matching` |
 | gRPC | `SR_ENABLE_GRPC` plus `SR_ENABLE_PROTOBUF` | `find_package(gRPC CONFIG REQUIRED)` | `gRPC::grpc++`, `gRPC::grpc_cpp_plugin` | `libgrpc++-dev protobuf-compiler-grpc` | `libgrpc++1.51t64 libgrpc29t64` | gateway/query/admin transport tests when server binding exists |
-| Kafka | `SR_ENABLE_REAL_KAFKA` | `find_package(RdKafka CONFIG REQUIRED)` | `RdKafka::rdkafka++`, `rdkafka++` | `librdkafka-dev` | `librdkafka++1` | `integration:ingestion`, `integration:geofence`, `integration:matching` |
+| Kafka | `SR_ENABLE_REAL_KAFKA` | `find_package(RdKafka CONFIG REQUIRED)` | `RdKafka::rdkafka++`, `rdkafka++` | `librdkafka-dev`; installs headers/libs but no `RdKafkaConfig.cmake` in Ubuntu 24.04, so the current strict CMake contract remains blocked with the `system` provider | `librdkafka++1` | `integration:ingestion`, `integration:geofence`, `integration:matching` |
 | Redis | `SR_ENABLE_REAL_REDIS` | `find_package(hiredis CONFIG REQUIRED)`, `find_package(redis++ CONFIG REQUIRED)` | `hiredis::hiredis`, `redis++::redis++` | `libhiredis-dev`; redis-plus-plus needs vcpkg, Conan, or a source/package overlay because no Ubuntu 24.04 archive package was found | `libhiredis1.1.0`; redis-plus-plus runtime depends on chosen provider | `integration:state`, `integration:nearby`, `integration:matching` |
 | PostGIS/libpq | `SR_ENABLE_REAL_POSTGIS` | `find_package(PostgreSQL REQUIRED)` | `PostgreSQL::PostgreSQL` | `libpq-dev postgresql-client` | `libpq5` | `integration:trip-history`, `integration:nearby`, `integration:geofence` |
 | H3 | `SR_ENABLE_REAL_H3` | `find_package(h3 CONFIG REQUIRED)` | `h3::h3`, `h3` | `libh3-dev` | `libh3-1` | `integration:nearby`, `integration:geofence` |
@@ -39,6 +39,13 @@ Ubuntu 24.04 package names in this table were checked against the Ubuntu package
 | toml++ | `SR_ENABLE_TOMLPLUSPLUS` | `find_package(tomlplusplus CONFIG REQUIRED)` | `tomlplusplus::tomlplusplus`, `tomlplusplus_tomlplusplus`, `tomlplusplus` | `libtomlplusplus-dev` | none expected for header-only package | config parser integration tests |
 
 Before enabling a new CI image job, verify the package names against the runner image with `apt-cache policy` or an equivalent package-index check inside the same Ubuntu base image. If a package is unavailable, keep the CMake switch gated and record the blocker instead of replacing the fallback implementation.
+
+## Package Verification Results
+
+| Batch | Dependency | Result | Action |
+|---|---|---|---|
+| 55 | Protobuf | `libprotobuf-dev`, `protobuf-compiler`, and `libprotobuf32t64` build/run successfully in `adapter-protobuf` | Keep protobuf image target available |
+| 58/59 | Kafka | `librdkafka-dev` and `librdkafka++1` install, but `cmake -DSR_ENABLE_REAL_KAFKA=ON` fails because no `RdKafkaConfig.cmake` or `rdkafka-config.cmake` is provided | Keep `adapter-kafka` as an explicit blocked target; choose vcpkg/Conan/source overlay or add a deliberate `FindRdKafka.cmake` in a future batch |
 
 ## Feature-Grouped Integration Labels
 
@@ -60,4 +67,4 @@ Before enabling a new CI image job, verify the package names against the runner 
 5. Promote the job to default CI only after it is stable and does not require unavailable external packages.
 
 ## Current Boundary
-`adapter-protobuf` is the first package-backed image path and enables only generated protobuf messages. The integration harness manifest exists and can be built manually, but real service-backed integration tests are still pending. Kafka, Redis, PostGIS, H3, gRPC, Prometheus, and toml++ remain off by default.
+`adapter-protobuf` is the first working package-backed image path and enables only generated protobuf messages. `adapter-kafka` is present as a blocked package-backed target: Ubuntu 24.04 `librdkafka-dev` installs headers/libs but does not satisfy the strict `find_package(RdKafka CONFIG REQUIRED)` contract. The integration harness manifest exists and can be built manually, but real service-backed integration tests are still pending. Kafka, Redis, PostGIS, H3, gRPC, Prometheus, and toml++ remain off by default.

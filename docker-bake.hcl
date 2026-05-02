@@ -44,3 +44,13 @@ target "adapter-protobuf" {
     SR_ENABLE_PROTOBUF = "ON"
   }
 }
+
+target "adapter-kafka" {
+  inherits = ["adapter-scaffold"]
+  tags = ["signalroute:adapter-kafka"]
+  args = {
+    SR_ADAPTER_APT_PACKAGES = "librdkafka-dev"
+    SR_ADAPTER_RUNTIME_APT_PACKAGES = "librdkafka++1"
+    SR_ENABLE_REAL_KAFKA = "ON"
+  }
+}
