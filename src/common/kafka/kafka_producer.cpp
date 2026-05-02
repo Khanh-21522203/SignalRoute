@@ -194,7 +194,9 @@ void KafkaProducer::produce(
         RdKafka::Producer::RK_MSG_COPY,
         const_cast<char*>(payload.data()),
         payload.size(),
-        &key,
+        key.data(),
+        key.size(),
+        0,
         pending);
 
     if (error != RdKafka::ERR_NO_ERROR) {

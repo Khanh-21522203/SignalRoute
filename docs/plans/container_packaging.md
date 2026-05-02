@@ -53,7 +53,7 @@ The Docker Bake file also exposes a Kafka package-backed target:
 docker buildx bake adapter-kafka
 ```
 
-`adapter-kafka` installs `librdkafka-dev` in the build stage, installs `librdkafka++1` in the runtime stage, and enables only `SR_ENABLE_REAL_KAFKA=ON`. As of Batch 59 this target is intentionally blocked at CMake configure because Ubuntu 24.04 `librdkafka-dev` does not provide `RdKafkaConfig.cmake` or `rdkafka-config.cmake` for `find_package(RdKafka CONFIG REQUIRED)`.
+`adapter-kafka` installs `librdkafka-dev` in the build stage, installs `librdkafka++1` in the runtime stage, uses `cmake/FindRdKafka.cmake` to bridge Ubuntu pkg-config/header/library installs to `RdKafka::rdkafka++`, and enables only `SR_ENABLE_REAL_KAFKA=ON`.
 
 Adapter build args:
 
@@ -188,7 +188,7 @@ That job:
 - attempts to build `signalroute:adapter-kafka` from `Dockerfile.adapters`;
 - verifies the packaged binary and runtime smoke only after the image build succeeds.
 
-Important boundary: this job is currently a package-provider check, not a green production image. Ubuntu 24.04 `librdkafka-dev` installs headers and libraries but does not provide the `RdKafka` CMake config package required by the current dependency contract.
+Important boundary: this job proves Kafka package compile/runtime linking only. It does not start a broker and does not prove broker-backed publish/consume semantics.
 
 ## CI Integration Harness
 The GitHub Actions workflow includes a manual `integration-harness` job. Start it with `workflow_dispatch` and `run_integration_harness=true`.
@@ -202,4 +202,4 @@ That job:
 Important boundary: this job validates the feature-group integration scaffold only. Real service-backed integration jobs must use the package and label conventions from `docs/plans/package_strategy_lock.md`.
 
 ## Current Boundary
-The default image proves reproducible packaging for the fallback runtime, `Dockerfile.adapters` provides a repeatable image path for package-backed builds, Compose provides local dependency containers, and CI can manually validate dependency service provisioning plus fallback-safe and protobuf-enabled adapter image paths. The Kafka adapter image path is defined but blocked on a provider that supplies the `RdKafka` CMake config package. The integration harness is available but does not start services. Real dependency-backed integration tests remain pending until package installation and adapter-specific integration tests are ready.
+The default image proves reproducible packaging for the fallback runtime, `Dockerfile.adapters` provides a repeatable image path for package-backed builds, Compose provides local dependency containers, and CI can manually validate dependency service provisioning plus fallback-safe, protobuf-enabled, and Kafka-enabled adapter image paths. The integration harness is available but does not start services. Broker-backed Kafka tests and other real dependency-backed integration tests remain pending until adapter-specific integration tests are ready.

@@ -51,7 +51,7 @@ if(SR_ENABLE_REAL_POSTGIS)
 endif()
 
 if(SR_ENABLE_REAL_KAFKA)
-    find_package(RdKafka CONFIG REQUIRED)
+    find_package(RdKafka REQUIRED)
     sr_link_one_of("librdkafka++" RdKafka::rdkafka++ rdkafka++)
 endif()
 
