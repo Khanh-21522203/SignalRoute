@@ -15,7 +15,7 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Header-only typed in-process `EventBus` with gateway, location, state, history, geofence, matching, worker, and metrics-facing payloads.
 - CTest wiring for independent unit executables.
 - In-memory Kafka producer/consumer fallback with produce, poll, commit, callback, and lag behavior; optional librdkafka++ adapter code is gated behind `SR_ENABLE_REAL_KAFKA`.
-- Redis fallback behavior for device state, H3 cell membership, fence state, reservations, TTL expiry, and stale H3 cleanup; optional redis-plus-plus adapter path is gated behind `SR_ENABLE_REAL_REDIS`.
+- Redis fallback behavior for device state, H3 cell membership, fence state, reservations, TTL expiry, and stale H3 cleanup; optional hiredis adapter path is gated behind `SR_ENABLE_REAL_REDIS`.
 - PostGIS fallback behavior for trip history, spatial trip filters, geofence rules, and geofence audit records; optional libpq/PostGIS adapter path is gated behind `SR_ENABLE_REAL_POSTGIS`.
 - Processor fallback flow with dedup, sequence guard, state/history fan-out, offset commits, and shared location payload decoding that uses protobuf when enabled and CSV as fallback.
 - In-process observer-style composition for processor -> state/history -> geofence -> metrics.
@@ -35,8 +35,8 @@ This plan turns the current fallback runtime into a finished backend system. It 
 - Protobuf package namespace is `signalroute.v1`, so generated C++ types live under `signalroute::v1` and do not collide with domain types under `signalroute`.
 
 ### Known Boundaries
-- Redis, PostGIS, gRPC, and Prometheus still need package-backed integration verification. H3 has package-backed compile/runtime and focused `test_h3_index` verification through `cmake/Findh3.cmake`; nearby/geofence service-backed H3 behavior still depends on Redis/PostGIS integration. Kafka has package-backed compile and broker-backed ingestion coverage; protobuf message generation is optional and integrated behind `SR_ENABLE_PROTOBUF`.
-- Production dependency switches exist; Kafka, Redis, H3, and PostGIS now have gated adapter paths behind existing interfaces. Kafka has package-backed compile/runtime and Redpanda-backed ingestion verification. H3 has package-backed compile/runtime verification. Redis and PostGIS still need provider-backed verification.
+- PostGIS, gRPC, and Prometheus still need package-backed integration verification. H3 has package-backed compile/runtime and focused `test_h3_index` verification through `cmake/Findh3.cmake`; Redis has package-backed compile/runtime and focused `test_redis_client` verification through `cmake/FindHiredis.cmake`; nearby/geofence service-backed behavior still depends on PostGIS integration. Kafka has package-backed compile and broker-backed ingestion coverage; protobuf message generation is optional and integrated behind `SR_ENABLE_PROTOBUF`.
+- Production dependency switches exist; Kafka, Redis, H3, and PostGIS now have gated adapter paths behind existing interfaces. Kafka has package-backed compile/runtime and Redpanda-backed ingestion verification. H3 and Redis have package-backed compile/runtime verification. PostGIS still needs provider-backed verification.
 - Package-backed adapter naming, package candidates, manual CI promotion, and integration feature labels are locked in `docs/plans/package_strategy_lock.md`.
 - Kafka package-backed compile verification works with the `system` provider through `cmake/FindRdKafka.cmake`; broker-backed `integration:ingestion` now verifies real Kafka produce/consume and processor state/history writes.
 - The `tests/integration/` harness is gated by `SR_BUILD_INTEGRATION_TESTS=ON`; it validates feature-group metadata by default and includes a Redpanda-backed ingestion test when real Kafka is enabled.
@@ -204,6 +204,7 @@ Use this section when running multiple agents. Each task is intentionally scoped
 
 ### Agent Task E1: Redis State Adapter
 - **Ownership:** `src/common/clients/redis_client.*`, Redis integration tests.
+- **Status:** Hiredis adapter path added behind `SR_ENABLE_REAL_REDIS`; package-backed `adapter-redis`/`adapter-redis-test` verification passes with Ubuntu `libhiredis-dev` through `cmake/FindHiredis.cmake`; feature-grouped state/nearby/matching integration pending.
 - **Goal:** Implement real Redis behavior with Lua CAS and pipelines.
 - **Items:** device state, H3 cell sets, fence state, reservations, health, metrics hooks.
 - **Depends on:** C2.
@@ -429,10 +430,10 @@ Replace the deterministic local grid fallback with real H3 while preserving the 
 ## Milestone 4: Redis State Store
 
 ### Goal
-Implement production Redis adapter for latest state, H3 cell index, fence state, and matching reservations. The optional adapter path is present behind `SR_ENABLE_REAL_REDIS`; package-backed compile/run verification remains pending locally.
+Implement production Redis adapter for latest state, H3 cell index, fence state, and matching reservations. The optional hiredis adapter path is present behind `SR_ENABLE_REAL_REDIS`; package-backed compile/runtime verification and focused Redis client tests pass against real Redis.
 
 ### Work Items
-- Choose Redis C++ client and connection pooling strategy.
+- Use hiredis as the package-backed Redis provider on Ubuntu 24.04.
 - Parse Redis config fields correctly.
 - Implement `ping` and health reporting.
 - Implement atomic device state CAS with Lua:
@@ -448,7 +449,7 @@ Implement production Redis adapter for latest state, H3 cell index, fence state,
 - Add metrics for latency, error rate, pool usage, and CAS rejects.
 
 ### Acceptance Criteria
-- Redis adapter passes integration tests against real Redis.
+- Redis adapter passes focused package-backed tests against real Redis; feature-grouped state/nearby/matching integration tests remain pending.
 - In-memory adapter remains usable for unit tests.
 - CAS prevents stale state overwrite under concurrent writes.
 - H3 cell index does not leave devices in old cells after movement.
@@ -934,7 +935,7 @@ Make docs match the implemented system exactly.
 ## Recommended Immediate Next Steps
 
 1. Keep tests feature/function-oriented as new coverage is added.
-2. Verify the Redis provider path by choosing a redis-plus-plus source/package overlay or pivot to PostGIS first.
-3. Add service-backed Redis/PostGIS integration tests grouped by feature before composing nearby/geofence production behavior.
+2. Verify the PostGIS provider path and package-backed image/test target.
+3. Add service-backed PostGIS and Redis/PostGIS integration tests grouped by feature before composing nearby/geofence production behavior.
 4. Implement real endpoint binding for gateway/query/admin gRPC and UDP/HTTP paths.
 5. Keep H3, Kafka, and protobuf package-backed image jobs manual until service-backed feature integrations are stable enough for default CI.

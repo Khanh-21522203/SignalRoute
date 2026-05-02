@@ -77,6 +77,28 @@ target "adapter-h3-test" {
   }
 }
 
+target "adapter-redis" {
+  inherits = ["adapter-scaffold"]
+  tags = ["signalroute:adapter-redis"]
+  args = {
+    SR_ADAPTER_APT_PACKAGES = "libhiredis-dev"
+    SR_ADAPTER_RUNTIME_APT_PACKAGES = "libhiredis1.1.0"
+    SR_ENABLE_REAL_REDIS = "ON"
+  }
+}
+
+target "adapter-redis-test" {
+  inherits = ["adapter-scaffold"]
+  target = "adapter-build"
+  tags = ["signalroute:adapter-redis-test"]
+  args = {
+    SR_ADAPTER_APT_PACKAGES = "libhiredis-dev"
+    SR_BUILD_TESTS = "ON"
+    SR_ADAPTER_BUILD_TARGETS = "test_redis_client"
+    SR_ENABLE_REAL_REDIS = "ON"
+  }
+}
+
 target "integration-ingestion" {
   inherits = ["adapter-scaffold"]
   target = "adapter-build"

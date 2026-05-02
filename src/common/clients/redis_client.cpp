@@ -1,13 +1,15 @@
 #include "redis_client.h"
 
 #if SIGNALROUTE_HAS_REDIS
-#include <sw/redis++/redis++.h>
+#include <hiredis/hiredis.h>
 #endif
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <exception>
 #include <iostream>
+#include <initializer_list>
 #include <iterator>
 #include <memory>
 #include <stdexcept>
@@ -16,6 +18,10 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
+#if SIGNALROUTE_HAS_REDIS
+#include <sys/time.h>
+#endif
 
 namespace signalroute {
 
@@ -35,6 +41,24 @@ std::string fence_key(const std::string& device_id, const std::string& fence_id)
 }
 
 #if SIGNALROUTE_HAS_REDIS
+
+struct RedisContextDeleter {
+    void operator()(redisContext* context) const {
+        if (context) {
+            redisFree(context);
+        }
+    }
+};
+
+struct RedisReplyDeleter {
+    void operator()(redisReply* reply) const {
+        if (reply) {
+            freeReplyObject(reply);
+        }
+    }
+};
+
+using RedisReplyPtr = std::unique_ptr<redisReply, RedisReplyDeleter>;
 
 std::pair<std::string, int> parse_redis_addr(const std::string& addrs) {
     const auto comma = addrs.find(',');
@@ -93,8 +117,86 @@ std::string to_string(uint64_t value) {
     return std::to_string(value);
 }
 
+std::string to_string(long long value) {
+    return std::to_string(value);
+}
+
 std::string to_string(int value) {
     return std::to_string(value);
+}
+
+timeval timeout_from_ms(int timeout_ms) {
+    const int normalized = std::max(1, timeout_ms);
+    timeval timeout{};
+    timeout.tv_sec = normalized / 1000;
+    timeout.tv_usec = (normalized % 1000) * 1000;
+    return timeout;
+}
+
+RedisReplyPtr redis_command(redisContext* context, const std::vector<std::string>& args) {
+    if (!context || args.empty()) {
+        return nullptr;
+    }
+
+    std::vector<const char*> argv;
+    std::vector<std::size_t> argvlen;
+    argv.reserve(args.size());
+    argvlen.reserve(args.size());
+    for (const auto& arg : args) {
+        argv.push_back(arg.data());
+        argvlen.push_back(arg.size());
+    }
+
+    return RedisReplyPtr(static_cast<redisReply*>(
+        redisCommandArgv(
+            context,
+            static_cast<int>(args.size()),
+            argv.data(),
+            argvlen.data())));
+}
+
+RedisReplyPtr redis_command(redisContext* context, std::initializer_list<std::string> args) {
+    return redis_command(context, std::vector<std::string>(args));
+}
+
+std::string reply_string(const redisReply* reply) {
+    if (!reply || !reply->str) {
+        return {};
+    }
+    return {reply->str, reply->len};
+}
+
+bool reply_status_equals(const redisReply* reply, const std::string& expected) {
+    return reply &&
+           reply->type == REDIS_REPLY_STATUS &&
+           reply_string(reply) == expected;
+}
+
+std::unordered_map<std::string, std::string> hash_from_reply(const redisReply* reply) {
+    std::unordered_map<std::string, std::string> fields;
+    if (!reply || reply->type != REDIS_REPLY_ARRAY) {
+        return fields;
+    }
+
+    for (std::size_t i = 0; i + 1 < reply->elements; i += 2) {
+        fields.emplace(
+            reply_string(reply->element[i]),
+            reply_string(reply->element[i + 1]));
+    }
+    return fields;
+}
+
+std::vector<std::string> string_array_from_reply(const redisReply* reply) {
+    std::vector<std::string> values;
+    if (!reply || reply->type != REDIS_REPLY_ARRAY) {
+        return values;
+    }
+
+    values.reserve(reply->elements);
+    for (std::size_t i = 0; i < reply->elements; ++i) {
+        values.push_back(reply_string(reply->element[i]));
+    }
+    return values;
 }
 
 DeviceState device_state_from_hash(const std::unordered_map<std::string, std::string>& fields) {
@@ -154,7 +256,7 @@ std::pair<std::string, std::string> parse_fence_ids(const RedisConfig& config, c
 
 struct RedisClient::Impl {
 #if SIGNALROUTE_HAS_REDIS
-    std::unique_ptr<sw::redis::Redis> redis;
+    std::unique_ptr<redisContext, RedisContextDeleter> redis;
 #endif
 };
 
@@ -162,16 +264,12 @@ RedisClient::RedisClient(const RedisConfig& config) : config_(config), impl_(std
 #if SIGNALROUTE_HAS_REDIS
     const auto [host, port] = parse_redis_addr(config_.addrs);
 
-    sw::redis::ConnectionOptions opts;
-    opts.host = host;
-    opts.port = port;
-    opts.connect_timeout = std::chrono::milliseconds(config_.connect_timeout_ms);
-    opts.socket_timeout = std::chrono::milliseconds(config_.read_timeout_ms);
-
-    sw::redis::ConnectionPoolOptions pool_opts;
-    pool_opts.size = static_cast<std::size_t>(std::max(1, config_.pool_size));
-
-    impl_->redis = std::make_unique<sw::redis::Redis>(opts, pool_opts);
+    auto connect_timeout = timeout_from_ms(config_.connect_timeout_ms);
+    impl_->redis.reset(redisConnectWithTimeout(host.c_str(), port, connect_timeout));
+    if (impl_->redis && impl_->redis->err == 0) {
+        auto read_timeout = timeout_from_ms(config_.read_timeout_ms);
+        redisSetTimeout(impl_->redis.get(), read_timeout);
+    }
 #else
     std::cerr << "[RedisClient] WARNING: using in-memory Redis fallback.\n";
 #endif
@@ -207,7 +305,11 @@ RedisClient& RedisClient::operator=(RedisClient&& other) noexcept {
 bool RedisClient::ping() {
 #if SIGNALROUTE_HAS_REDIS
     try {
-        return impl_ && impl_->redis && impl_->redis->ping() == "PONG";
+        if (!impl_ || !impl_->redis || impl_->redis->err != 0) {
+            return false;
+        }
+        auto reply = redis_command(impl_->redis.get(), {"PING"});
+        return reply_status_equals(reply.get(), "PONG");
     } catch (const std::exception&) {
         return false;
     }
@@ -233,27 +335,28 @@ bool RedisClient::update_device_state_cas(
     }
 
     if (current && current->h3_cell != state.h3_cell) {
-        impl_->redis->srem(cell_key(config_, current->h3_cell), device_id);
+        redis_command(impl_->redis.get(), {"SREM", cell_key(config_, current->h3_cell), device_id});
     }
 
     DeviceState stored = state;
     stored.device_id = device_id;
-    impl_->redis->hmset(key, {
-        {"device_id", stored.device_id},
-        {"lat", to_string(stored.lat)},
-        {"lon", to_string(stored.lon)},
-        {"altitude_m", to_string(stored.altitude_m)},
-        {"accuracy_m", to_string(stored.accuracy_m)},
-        {"speed_ms", to_string(stored.speed_ms)},
-        {"heading_deg", to_string(stored.heading_deg)},
-        {"h3_cell", to_string(stored.h3_cell)},
-        {"seq", to_string(stored.seq)},
-        {"updated_at", to_string(stored.updated_at)},
+    redis_command(impl_->redis.get(), {
+        "HSET", key,
+        "device_id", stored.device_id,
+        "lat", to_string(stored.lat),
+        "lon", to_string(stored.lon),
+        "altitude_m", to_string(stored.altitude_m),
+        "accuracy_m", to_string(stored.accuracy_m),
+        "speed_ms", to_string(stored.speed_ms),
+        "heading_deg", to_string(stored.heading_deg),
+        "h3_cell", to_string(stored.h3_cell),
+        "seq", to_string(stored.seq),
+        "updated_at", to_string(stored.updated_at),
     });
     if (ttl_s > 0) {
-        impl_->redis->expire(key, std::chrono::seconds(ttl_s));
+        redis_command(impl_->redis.get(), {"EXPIRE", key, to_string(ttl_s)});
     }
-    impl_->redis->sadd(cell_key(config_, stored.h3_cell), device_id);
+    redis_command(impl_->redis.get(), {"SADD", cell_key(config_, stored.h3_cell), device_id});
     return true;
 #else
     std::lock_guard lock(mu_);
@@ -282,8 +385,8 @@ bool RedisClient::update_device_state_cas(
 
 std::optional<DeviceState> RedisClient::get_device_state(const std::string& device_id) {
 #if SIGNALROUTE_HAS_REDIS
-    std::unordered_map<std::string, std::string> fields;
-    impl_->redis->hgetall(device_key(config_, device_id), std::inserter(fields, fields.begin()));
+    auto reply = redis_command(impl_->redis.get(), {"HGETALL", device_key(config_, device_id)});
+    const auto fields = hash_from_reply(reply.get());
     if (fields.empty()) {
         return std::nullopt;
     }
@@ -326,7 +429,7 @@ std::vector<std::optional<DeviceState>> RedisClient::get_device_states_batch(
 
 void RedisClient::add_device_to_cell(int64_t cell_id, const std::string& device_id) {
 #if SIGNALROUTE_HAS_REDIS
-    impl_->redis->sadd(cell_key(config_, cell_id), device_id);
+    redis_command(impl_->redis.get(), {"SADD", cell_key(config_, cell_id), device_id});
 #else
     std::lock_guard lock(mu_);
     cell_devices_[cell_id].insert(device_id);
@@ -335,7 +438,7 @@ void RedisClient::add_device_to_cell(int64_t cell_id, const std::string& device_
 
 void RedisClient::remove_device_from_cell(int64_t cell_id, const std::string& device_id) {
 #if SIGNALROUTE_HAS_REDIS
-    impl_->redis->srem(cell_key(config_, cell_id), device_id);
+    redis_command(impl_->redis.get(), {"SREM", cell_key(config_, cell_id), device_id});
 #else
     std::lock_guard lock(mu_);
     auto it = cell_devices_.find(cell_id);
@@ -351,9 +454,8 @@ void RedisClient::remove_device_from_cell(int64_t cell_id, const std::string& de
 
 std::vector<std::string> RedisClient::get_devices_in_cell(int64_t cell_id) {
 #if SIGNALROUTE_HAS_REDIS
-    std::vector<std::string> devices;
-    impl_->redis->smembers(cell_key(config_, cell_id), std::back_inserter(devices));
-    return devices;
+    auto reply = redis_command(impl_->redis.get(), {"SMEMBERS", cell_key(config_, cell_id)});
+    return string_array_from_reply(reply.get());
 #else
     std::lock_guard lock(mu_);
     std::vector<std::string> devices;
@@ -397,15 +499,23 @@ std::pair<std::size_t, std::size_t> RedisClient::remove_stale_cell_members() {
     std::size_t touched = 0;
     long long cursor = 0;
     do {
-        std::vector<std::string> keys;
-        cursor = impl_->redis->scan(cursor, cell_scan_pattern(config_), 100, std::back_inserter(keys));
+        auto scan_reply = redis_command(impl_->redis.get(), {
+            "SCAN", to_string(cursor), "MATCH", cell_scan_pattern(config_), "COUNT", "100"});
+        if (!scan_reply || scan_reply->type != REDIS_REPLY_ARRAY || scan_reply->elements != 2) {
+            break;
+        }
+        cursor = std::stoll(reply_string(scan_reply->element[0]));
+        const auto keys = string_array_from_reply(scan_reply->element[1]);
         for (const auto& key : keys) {
-            std::vector<std::string> devices;
-            impl_->redis->smembers(key, std::back_inserter(devices));
+            auto members_reply = redis_command(impl_->redis.get(), {"SMEMBERS", key});
+            const auto devices = string_array_from_reply(members_reply.get());
             std::size_t removed_from_cell = 0;
             for (const auto& device_id : devices) {
                 if (!get_device_state(device_id)) {
-                    removed_from_cell += static_cast<std::size_t>(impl_->redis->srem(key, device_id));
+                    auto removed_reply = redis_command(impl_->redis.get(), {"SREM", key, device_id});
+                    if (removed_reply && removed_reply->type == REDIS_REPLY_INTEGER) {
+                        removed_from_cell += static_cast<std::size_t>(removed_reply->integer);
+                    }
                 }
             }
             if (removed_from_cell > 0) {
@@ -461,10 +571,11 @@ void RedisClient::set_fence_state(const std::string& device_id,
             : timestamp_ms;
     }
 
-    impl_->redis->hmset(fence_redis_key(config_, device_id, fence_id), {
-        {"state", fence_state_to_string(state)},
-        {"entered_at_ms", to_string(entered_at_ms)},
-        {"updated_at_ms", to_string(timestamp_ms)},
+    redis_command(impl_->redis.get(), {
+        "HSET", fence_redis_key(config_, device_id, fence_id),
+        "state", fence_state_to_string(state),
+        "entered_at_ms", to_string(entered_at_ms),
+        "updated_at_ms", to_string(timestamp_ms),
     });
 #else
     std::lock_guard lock(mu_);
@@ -513,10 +624,10 @@ std::optional<FenceStateRecord> RedisClient::get_fence_state_record(
     const std::string& device_id,
     const std::string& fence_id) {
 #if SIGNALROUTE_HAS_REDIS
-    std::unordered_map<std::string, std::string> fields;
-    impl_->redis->hgetall(
-        fence_redis_key(config_, device_id, fence_id),
-        std::inserter(fields, fields.begin()));
+    auto reply = redis_command(
+        impl_->redis.get(),
+        {"HGETALL", fence_redis_key(config_, device_id, fence_id)});
+    const auto fields = hash_from_reply(reply.get());
     if (fields.empty()) {
         return std::nullopt;
     }
@@ -536,8 +647,13 @@ std::vector<FenceStateRecord> RedisClient::list_fence_states(FenceState state) {
     std::vector<FenceStateRecord> records;
     long long cursor = 0;
     do {
-        std::vector<std::string> keys;
-        cursor = impl_->redis->scan(cursor, fence_scan_pattern(config_), 100, std::back_inserter(keys));
+        auto scan_reply = redis_command(impl_->redis.get(), {
+            "SCAN", to_string(cursor), "MATCH", fence_scan_pattern(config_), "COUNT", "100"});
+        if (!scan_reply || scan_reply->type != REDIS_REPLY_ARRAY || scan_reply->elements != 2) {
+            break;
+        }
+        cursor = std::stoll(reply_string(scan_reply->element[0]));
+        const auto keys = string_array_from_reply(scan_reply->element[1]);
         for (const auto& key : keys) {
             const auto [device_id, fence_id] = parse_fence_ids(config_, key);
             if (device_id.empty() || fence_id.empty()) {
@@ -569,11 +685,9 @@ bool RedisClient::try_reserve_agent(const std::string& agent_id,
     }
 
 #if SIGNALROUTE_HAS_REDIS
-    return impl_->redis->set(
-        reservation_key(config_, agent_id),
-        request_id,
-        std::chrono::milliseconds(ttl_ms),
-        sw::redis::UpdateType::NOT_EXIST);
+    auto reply = redis_command(impl_->redis.get(), {
+        "SET", reservation_key(config_, agent_id), request_id, "PX", to_string(ttl_ms), "NX"});
+    return reply_status_equals(reply.get(), "OK");
 #else
     std::lock_guard lock(mu_);
     const int64_t now_ms = monotonic_now_ms();
@@ -598,7 +712,7 @@ void RedisClient::release_agent(const std::string& agent_id,
 #if SIGNALROUTE_HAS_REDIS
     auto holder = get_agent_reservation_holder(agent_id);
     if (holder && *holder == request_id) {
-        impl_->redis->del(reservation_key(config_, agent_id));
+        redis_command(impl_->redis.get(), {"DEL", reservation_key(config_, agent_id)});
     }
 #else
     std::lock_guard lock(mu_);
@@ -625,11 +739,11 @@ bool RedisClient::is_agent_reserved(const std::string& agent_id) const {
 std::optional<std::string> RedisClient::get_agent_reservation_holder(
     const std::string& agent_id) const {
 #if SIGNALROUTE_HAS_REDIS
-    auto value = impl_->redis->get(reservation_key(config_, agent_id));
-    if (!value) {
+    auto reply = redis_command(impl_->redis.get(), {"GET", reservation_key(config_, agent_id)});
+    if (!reply || reply->type == REDIS_REPLY_NIL) {
         return std::nullopt;
     }
-    return *value;
+    return reply_string(reply.get());
 #else
     std::lock_guard lock(mu_);
     auto it = reservations_.find(agent_id);

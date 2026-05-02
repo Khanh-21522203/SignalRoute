@@ -55,12 +55,13 @@ ThreadSanitizer is intentionally mutually exclusive with ASan/UBSan in `cmake/Si
 | adapter-protobuf-image | manual | `workflow_dispatch` with `run_adapter_protobuf_image=true`; builds and smoke-tests the protobuf-enabled adapter image with protobuf packages only |
 | adapter-kafka-image | manual | `workflow_dispatch` with `run_adapter_kafka_image=true`; builds and smoke-tests the Kafka-enabled adapter image through `FindRdKafka.cmake` |
 | adapter-h3-image | manual | `workflow_dispatch` with `run_adapter_h3_image=true`; builds and smoke-tests the H3-enabled adapter image through `Findh3.cmake`, then runs `test_h3_index` in `adapter-h3-test` |
+| adapter-redis-image | manual | `workflow_dispatch` with `run_adapter_redis_image=true`; builds and smoke-tests the Redis-enabled adapter image through `FindHiredis.cmake`, then runs `test_redis_client` against Redis in `adapter-redis-test` |
 | integration-harness | manual | `workflow_dispatch` with `run_integration_harness=true`; builds `SR_BUILD_INTEGRATION_TESTS=ON` and runs the feature-group manifest only |
 | ingestion-integration | manual | `workflow_dispatch` with `run_ingestion_integration=true`; starts Redpanda, builds with Kafka+protobuf packages, and runs `integration:ingestion` |
 | tsan-smoke | optional/manual | configure/build with `-DSR_ENABLE_TSAN=ON`; select focused concurrency tests first |
 | grpc-package | no | Enable after `gRPC::grpc++` and `gRPC::grpc_cpp_plugin` are installed |
 | kafka-integration | manual | Broker-backed ingestion coverage exists under `run_ingestion_integration`; promote only after broader adapter stability |
-| redis-integration | no | Enable after hiredis/redis++ packages and Redis service are available |
+| redis-integration | partial/manual | Package-backed Redis compile/runtime and focused Redis client behavior are covered by `adapter-redis-image`; enable feature-grouped state/nearby/matching integration after surrounding dependencies are verified |
 | postgis-integration | no | Enable after libpq/PostGIS packages and database service are available |
 | h3-integration | partial/manual | Package-backed H3 compile/runtime is covered by `adapter-h3-image`; enable nearby/geofence integration after Redis/PostGIS providers are verified |
 
@@ -76,6 +77,7 @@ Current jobs:
 - `adapter-protobuf-image`: manual-only package-backed image job that validates `adapter-protobuf`, builds `signalroute:adapter-protobuf`, checks runtime shared library resolution with `ldd`, and runs a short protobuf-enabled runtime smoke.
 - `adapter-kafka-image`: manual-only package-backed image job that validates `adapter-kafka`, builds `signalroute:adapter-kafka`, checks runtime shared library resolution with `ldd`, and runs a short Kafka-enabled runtime smoke.
 - `adapter-h3-image`: manual-only package-backed image job that validates `adapter-h3` and `adapter-h3-test`, builds `signalroute:adapter-h3`, checks runtime `libh3` resolution with `ldd`, runs `test_h3_index` from the test image, and runs a short H3-enabled runtime smoke.
+- `adapter-redis-image`: manual-only package-backed image job that validates `adapter-redis` and `adapter-redis-test`, starts Redis, builds `signalroute:adapter-redis`, checks runtime `libhiredis` resolution with `ldd`, runs `test_redis_client` from the test image against Redis, and runs a short Redis-enabled runtime smoke.
 - `integration-harness`: manual-only harness job that configures `SR_BUILD_INTEGRATION_TESTS=ON`, builds `test_integration_harness`, and runs CTest label `integration` without starting external services.
 - `ingestion-integration`: manual-only Redpanda-backed job that installs Kafka plus protobuf packages, builds `test_ingestion_pipeline`, and runs CTest label `integration:ingestion` with `SIGNALROUTE_RUN_KAFKA_INTEGRATION=1`.
 
@@ -91,7 +93,9 @@ Run the Kafka adapter image check from GitHub Actions with `workflow_dispatch` a
 
 Run the H3 adapter image check from GitHub Actions with `workflow_dispatch` and `run_adapter_h3_image=true`. This job installs `libh3-dev`/`libh3-1` inside the Docker image, uses the repository `Findh3.cmake` bridge because Ubuntu's packaged `h3Config.cmake` references a missing `h3` CLI path, enables only `SR_ENABLE_REAL_H3=ON`, runs `test_h3_index`, and keeps Kafka, protobuf, gRPC, Redis, PostGIS, Prometheus, and toml++ off.
 
+Run the Redis adapter image check from GitHub Actions with `workflow_dispatch` and `run_adapter_redis_image=true`. This job starts Redis, installs `libhiredis-dev`/`libhiredis1.1.0` inside the Docker image, uses the repository `FindHiredis.cmake` bridge because Ubuntu's packaged `HiredisConfig.cmake` does not provide an imported target, enables only `SR_ENABLE_REAL_REDIS=ON`, runs `test_redis_client` against Redis, and keeps Kafka, protobuf, gRPC, PostGIS, H3, Prometheus, and toml++ off.
+
 Run the integration harness from GitHub Actions with `workflow_dispatch` and `run_integration_harness=true`. This job validates the feature-group integration manifest only. Run the Kafka ingestion integration with `workflow_dispatch` and `run_ingestion_integration=true`; it starts Redpanda and runs `integration:ingestion` against real Kafka plus protobuf packages.
 
 ## Current Boundary
-Batches 61-62 add a manual `ingestion-integration` job for broker-backed Kafka ingestion. Batch 63 adds a manual `adapter-h3-image` job for package-backed H3 compile/runtime and focused H3 tests. Default push and pull request CI remains dependency-free fallback, protobuf, and focused ASan+UBSan. The protobuf image proves package-backed generated-message packaging, the Kafka image proves package-backed compile/runtime linking, the H3 image proves package-backed spatial linking, the integration harness proves feature-group naming and labels, and the ingestion job proves Redpanda-backed produce/consume plus processor state/history writes.
+Batches 61-62 add a manual `ingestion-integration` job for broker-backed Kafka ingestion. Batch 63 adds a manual `adapter-h3-image` job for package-backed H3 compile/runtime and focused H3 tests. Batch 64 adds a manual `adapter-redis-image` job for package-backed Redis compile/runtime and focused Redis client behavior against Redis. Default push and pull request CI remains dependency-free fallback, protobuf, and focused ASan+UBSan. The protobuf image proves package-backed generated-message packaging, the Kafka image proves package-backed compile/runtime linking, the H3 image proves package-backed spatial linking, the Redis image proves package-backed state-client linking, the integration harness proves feature-group naming and labels, and the ingestion job proves Redpanda-backed produce/consume plus processor state/history writes.

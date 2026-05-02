@@ -12,7 +12,7 @@
  * Lua scripts are used for atomic CAS operations (sequence guard)
  * and combined state+index updates.
  *
- * Dependencies: hiredis + redis-plus-plus (or equivalent)
+ * Dependencies: hiredis in real Redis builds.
  */
 
 #include "../config/config.h"
@@ -200,9 +200,6 @@ private:
     std::unordered_map<std::string, FenceStateRecord> fence_states_;
     std::unordered_map<std::string, ReservationRecord> reservations_;
 
-    // TODO: Add redis-plus-plus connection pool
-    // sw::redis::ConnectionPool pool_;
-    //
     // TODO: Pre-loaded Lua script SHAs
     // std::string cas_update_sha_;
     // std::string cas_delete_sha_;

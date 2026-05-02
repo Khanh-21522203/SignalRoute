@@ -39,10 +39,8 @@ if(SR_ENABLE_REAL_H3)
 endif()
 
 if(SR_ENABLE_REAL_REDIS)
-    find_package(hiredis CONFIG REQUIRED)
-    find_package(redis++ CONFIG REQUIRED)
+    find_package(Hiredis REQUIRED)
     sr_link_one_of("hiredis" hiredis::hiredis hiredis)
-    sr_link_one_of("redis++" redis++::redis++ redis++::redis++_static redis++)
 endif()
 
 if(SR_ENABLE_REAL_POSTGIS)

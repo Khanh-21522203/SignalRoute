@@ -64,6 +64,15 @@ docker buildx bake adapter-h3-test
 
 `adapter-h3` installs `libh3-dev` in the build stage, installs `libh3-1` in the runtime stage, uses `cmake/Findh3.cmake` to bridge Ubuntu header/library installs to `h3::h3`, and enables only `SR_ENABLE_REAL_H3=ON`. `adapter-h3-test` builds `test_h3_index` with `SR_ENABLE_REAL_H3=ON` so the package-backed H3 implementation can be verified without installing dependencies locally.
 
+The Docker Bake file also exposes Redis package-backed targets:
+
+```sh
+docker buildx bake adapter-redis
+docker buildx bake adapter-redis-test
+```
+
+`adapter-redis` installs `libhiredis-dev` in the build stage, installs `libhiredis1.1.0` in the runtime stage, uses `cmake/FindHiredis.cmake` to bridge Ubuntu header/library installs to `hiredis::hiredis`, and enables only `SR_ENABLE_REAL_REDIS=ON`. `adapter-redis-test` builds `test_redis_client` with `SR_ENABLE_REAL_REDIS=ON`; run that image against Redis with `SIGNALROUTE_REDIS_ADDRS` to verify real Redis behavior without installing dependencies locally.
+
 The Docker Bake file also exposes a broker-backed ingestion build-stage target:
 
 ```sh
@@ -222,6 +231,20 @@ That job:
 
 Important boundary: this job proves H3 package compile/runtime linking only. Nearby and geofence service-backed behavior still requires Redis/PostGIS provider verification and feature-grouped integration tests.
 
+## CI Redis Adapter Image
+The GitHub Actions workflow includes a manual `adapter-redis-image` job. Start it with `workflow_dispatch` and `run_adapter_redis_image=true`.
+
+That job:
+- starts Redis as a GitHub Actions service container;
+- validates the `adapter-redis` and `adapter-redis-test` Docker Bake targets;
+- builds `signalroute:adapter-redis` from `Dockerfile.adapters`;
+- verifies the packaged binary and that `libhiredis.so.1.1.0` resolves at runtime;
+- builds `signalroute:adapter-redis-test`;
+- runs `test_redis_client` from the Redis test image against Redis;
+- runs a short query-role Redis-enabled runtime smoke and expects timeout exit `124` after clean SIGTERM.
+
+Important boundary: this job proves Redis package compile/runtime linking and focused client behavior only. State, nearby, matching, and cross-service integration tests remain feature-grouped future work.
+
 ## CI Ingestion Integration
 The GitHub Actions workflow includes a manual `ingestion-integration` job. Start it with `workflow_dispatch` and `run_ingestion_integration=true`.
 
@@ -245,4 +268,4 @@ That job:
 Important boundary: this job validates the feature-group integration scaffold only. Real service-backed integration jobs must use the package and label conventions from `docs/plans/package_strategy_lock.md`.
 
 ## Current Boundary
-The default image proves reproducible packaging for the fallback runtime, `Dockerfile.adapters` provides repeatable package-backed build paths, Compose provides local dependency containers, and CI can manually validate dependency service provisioning plus fallback-safe, protobuf-enabled, Kafka-enabled, H3-enabled, and broker-backed ingestion paths. The integration harness remains available for manifest validation. Real Redis, PostGIS, geofence, matching, and endpoint integration tests remain pending; H3 package compile/runtime is verified, but nearby/geofence service-backed H3 behavior still needs Redis/PostGIS-backed integration coverage.
+The default image proves reproducible packaging for the fallback runtime, `Dockerfile.adapters` provides repeatable package-backed build paths, Compose provides local dependency containers, and CI can manually validate dependency service provisioning plus fallback-safe, protobuf-enabled, Kafka-enabled, H3-enabled, Redis-enabled, and broker-backed ingestion paths. The integration harness remains available for manifest validation. Real PostGIS, geofence, matching, and endpoint integration tests remain pending; H3 and Redis package compile/runtime are verified, but nearby/geofence service-backed behavior still needs PostGIS-backed integration coverage.

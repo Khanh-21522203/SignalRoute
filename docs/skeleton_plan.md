@@ -934,7 +934,7 @@ A single `EVALSHA` call atomically reads `last_seq` and conditionally writes, el
 > **Build system dependencies (confirmed):**
 > - **gRPC** (grpc++) — for service APIs
 > - **Protobuf** (protoc) — for wire format
-> - **hiredis** / **redis-plus-plus** — for Redis client
+> - **hiredis** — for Redis client
 > - **libpq** / **libpqxx** — for PostGIS
 > - **librdkafka** / **cppkafka** — for Kafka
 > - **h3** (h3-cxx bindings) — for H3 spatial indexing

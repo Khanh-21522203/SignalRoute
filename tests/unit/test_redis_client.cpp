@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -11,6 +12,20 @@
 #include <vector>
 
 namespace {
+
+signalroute::RedisConfig make_config() {
+    signalroute::RedisConfig config;
+#if SIGNALROUTE_HAS_REDIS
+    if (const char* addrs = std::getenv("SIGNALROUTE_REDIS_ADDRS")) {
+        config.addrs = addrs;
+    }
+    static const std::string prefix =
+        "sr-test-" + std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count());
+    config.key_prefix = prefix;
+#endif
+    return config;
+}
 
 signalroute::DeviceState make_state(std::string device_id, uint64_t seq, int64_t h3_cell) {
     signalroute::DeviceState state;
@@ -36,12 +51,12 @@ void assert_contains_exactly(const std::vector<std::string>& values,
 } // namespace
 
 void test_ping_returns_true() {
-    signalroute::RedisClient redis(signalroute::RedisConfig{});
+    signalroute::RedisClient redis(make_config());
     assert(redis.ping());
 }
 
 void test_cas_accepts_new_sequence_and_rejects_same_or_lower() {
-    signalroute::RedisClient redis(signalroute::RedisConfig{});
+    signalroute::RedisClient redis(make_config());
 
     assert(redis.update_device_state_cas("dev-1", make_state("ignored", 10, 100), 3600));
     assert(!redis.update_device_state_cas("dev-1", make_state("dev-1", 10, 100), 3600));
@@ -55,7 +70,7 @@ void test_cas_accepts_new_sequence_and_rejects_same_or_lower() {
 }
 
 void test_moving_device_updates_h3_cell_membership() {
-    signalroute::RedisClient redis(signalroute::RedisConfig{});
+    signalroute::RedisClient redis(make_config());
 
     assert(redis.update_device_state_cas("dev-1", make_state("dev-1", 1, 101), 3600));
     assert_contains_exactly(redis.get_devices_in_cell(101), {"dev-1"});
@@ -66,7 +81,7 @@ void test_moving_device_updates_h3_cell_membership() {
 }
 
 void test_batch_reads_preserve_input_order_and_missing_devices() {
-    signalroute::RedisClient redis(signalroute::RedisConfig{});
+    signalroute::RedisClient redis(make_config());
 
     assert(redis.update_device_state_cas("dev-a", make_state("dev-a", 1, 100), 3600));
     assert(redis.update_device_state_cas("dev-b", make_state("dev-b", 2, 200), 3600));
@@ -84,7 +99,7 @@ void test_batch_reads_preserve_input_order_and_missing_devices() {
 }
 
 void test_get_devices_in_cells_returns_unique_device_ids() {
-    signalroute::RedisClient redis(signalroute::RedisConfig{});
+    signalroute::RedisClient redis(make_config());
 
     redis.add_device_to_cell(100, "dev-1");
     redis.add_device_to_cell(100, "dev-2");
@@ -96,7 +111,7 @@ void test_get_devices_in_cells_returns_unique_device_ids() {
 }
 
 void test_fence_state_set_get() {
-    signalroute::RedisClient redis(signalroute::RedisConfig{});
+    signalroute::RedisClient redis(make_config());
 
     assert(!redis.get_fence_state("dev-1", "fence-1").has_value());
     redis.set_fence_state("dev-1", "fence-1", signalroute::FenceState::INSIDE, 1234);
@@ -119,7 +134,7 @@ void test_fence_state_set_get() {
 }
 
 void test_agent_reservation_release_requires_matching_request_id() {
-    signalroute::RedisClient redis(signalroute::RedisConfig{});
+    signalroute::RedisClient redis(make_config());
 
     assert(redis.try_reserve_agent("agent-1", "request-1", 5000));
     assert(!redis.try_reserve_agent("agent-1", "request-2", 5000));
@@ -132,7 +147,7 @@ void test_agent_reservation_release_requires_matching_request_id() {
 }
 
 void test_agent_reservation_expires() {
-    signalroute::RedisClient redis(signalroute::RedisConfig{});
+    signalroute::RedisClient redis(make_config());
 
     assert(redis.try_reserve_agent("agent-1", "request-1", 1));
     std::this_thread::sleep_for(std::chrono::milliseconds(3));
@@ -142,7 +157,7 @@ void test_agent_reservation_expires() {
 }
 
 void test_stale_cell_cleanup_removes_orphan_members() {
-    signalroute::RedisClient redis(signalroute::RedisConfig{});
+    signalroute::RedisClient redis(make_config());
 
     assert(redis.update_device_state_cas("dev-live", make_state("dev-live", 1, 100), 3600));
     redis.add_device_to_cell(100, "dev-orphan");
@@ -167,6 +182,6 @@ int main() {
     test_agent_reservation_release_requires_matching_request_id();
     test_agent_reservation_expires();
     test_stale_cell_cleanup_removes_orphan_members();
-    std::cout << "All RedisClient fallback tests passed.\n";
+    std::cout << "All RedisClient tests passed.\n";
     return 0;
 }
